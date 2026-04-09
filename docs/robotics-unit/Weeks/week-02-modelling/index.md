@@ -26,8 +26,8 @@ $$
 \mathbf{x} = (x, y, \theta)
 $$
 
-- \(x, y\): position in the world  
-- \(\theta\): orientation  
+- $(x, y)$: position in the world  
+- $(\theta)$: orientation  
 
 So this robot has **3 degrees of freedom**.
 
@@ -70,7 +70,7 @@ Another important idea:
 Example:
 
 A hovercraft has:
-- configuration: \((x, y, \theta)\) → 3 DOF  
+- configuration: $$(x, y, \theta)$ → 3 DOF  
 - actuators: 2  
 
 So it is **underactuated**.
@@ -97,9 +97,9 @@ This is just a more concrete version of what we wrote in Week 1.
 
 ### What goes into a motion model?
 
-- state \(x\): position, orientation, velocity  
-- control \(u\): motor commands, steering angle, etc  
-- disturbances \(\epsilon\): things we don’t control  
+- state $x$: position, orientation, velocity  
+- control $u$: motor commands, steering angle, etc  
+- disturbances $\epsilon$: things we don’t control  
 
 So really:
 
@@ -126,8 +126,8 @@ $$
 
 Controls:
 
-- \(v\): forward velocity  
-- \(\delta\): steering angle  
+- $v$$: forward velocity  
+- $\delta$: steering angle  
 
 ---
 
@@ -186,8 +186,8 @@ $$
 
 We often use:
 
-- \(v\): linear velocity  
-- \(\omega\): angular velocity  
+- $v$: linear velocity  
+- $\omega$: angular velocity  
 
 So:
 
@@ -413,7 +413,7 @@ That was deliberate.
 
 Because once you understand:
 
-> everything is just \(x_{k+1} = f(x_k, u_k)\)
+> everything is just $x_{k+1} = f(x_k, u_k)$
 
 you can scale that idea to anything:
 
@@ -424,7 +424,7 @@ you can scale that idea to anything:
 
 Same idea.
 
-Just a bigger \(x\), and a more complicated \(f\). All of robotics sits on top of modelling.
+Just a bigger $x$, and a more complicated $f$. All of robotics sits on top of modelling.
 
 Unfortunately, f your model is wrong, your controller will be wrong. And your robot will let you know.
 
@@ -434,6 +434,6 @@ So far we have assumed we know where the robot is.
 
 Next:
 
-> how do we estimate \(x\) in the real world?
+> how do we estimate $x$ in the real world?
 
 → localisation and SLAM
