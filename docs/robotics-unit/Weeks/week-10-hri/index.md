@@ -116,7 +116,7 @@ Models of **technology acceptance** help us understand adoption. The **Technolog
 
 The **Uncanny Valley** is a well-known phenomenon in social and humanoid robotics.
 
-> Mori, M., MacDorman, K. F., and Kageki, N. (2012). "The Uncanny Valley [From the Field]." *IEEE Robotics and Automation Magazine*, 19(2), 98–10. As robots become more human-like in appearance, human reaction to them becomes increasingly positive — up to a point. When the robot is *almost* but not quite human, it provokes a strong sense of unease or revulsion. The valley describes this dip before the curve recovers for a fully realistic human appearance. The practical implication: robots that are clearly mechanical or clearly human tend to be received more warmly than those that fall in between.
+> Mori, M., MacDorman, K. F., and Kageki, N. (2012). "The Uncanny Valley [From the Field]." *IEEE Robotics and Automation Magazine*, 19(2), 98–100. As robots become more human-like in appearance, human reaction to them becomes increasingly positive — up to a point. When the robot is *almost* but not quite human, it provokes a strong sense of unease or revulsion. The valley describes this dip before the curve recovers for a fully realistic human appearance. The practical implication: robots that are clearly mechanical or clearly human tend to be received more warmly than those that fall in between.
 
 **Ethics** adds a layer of responsibility. When a robot shares space with people, it makes decisions that affect them. Key ethical considerations include:
 
