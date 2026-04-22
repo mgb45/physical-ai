@@ -402,6 +402,137 @@ $$
 
 Option B: Discretize actions into bins (works surprisingly well for some robot policies).
 
+---
+
+### Generative models for behaviour cloning
+
+The Gaussian and mixture-of-Gaussians approaches above are both *generative models* in a specific sense: they model the full distribution $p(a \mid o)$ rather than just producing a single deterministic action. This section gives a brief conceptual introduction to generative modelling, then covers two widely used families in modern robot learning: **density networks** and **diffusion policies**.
+
+#### What is a generative model?
+
+A standard supervised neural network learns a function:
+
+$$
+\hat{a} = f_\theta(o)
+$$
+
+It maps an observation to a single output. This is sometimes called a *discriminative* model.
+
+A **generative model** instead learns a *distribution* over outputs:
+
+$$
+p_\theta(a \mid o)
+$$
+
+Once trained, you can draw samples $a \sim p_\theta(a \mid o)$ and reason about which actions are probable.
+
+**Why does this matter for robot learning?**
+
+Demonstrations are often *multimodal*: two experts doing the same task may take genuinely different actions at the same observation (e.g. "go around the left or right side of an obstacle"). A deterministic network or a single Gaussian will average these modes — and averaged robot actions are often bad actions. A generative model can represent all valid modes.
+
+The three main generative modelling tools you will encounter in robot learning are:
+
+| Approach | Core idea | Key property |
+|---|---|---|
+| Mixture density network | Predict parameters of a mixture of Gaussians | Simple, trainable end-to-end with NLL |
+| Normalizing flow | Map Gaussian noise through invertible transforms | Exact likelihood, latency scales with depth |
+| Diffusion model | Iteratively denoise random noise into an action | State-of-the-art expressiveness; slower sampling |
+
+---
+
+#### Density networks (Mixture Density Networks)
+
+A **Mixture Density Network (MDN)** is a neural network that predicts the parameters of a Gaussian mixture model directly:
+
+$$
+p_\theta(a \mid o) = \sum_{k=1}^{K} \underbrace{w_k(o)}_{\text{mixing weight}} \; \mathcal{N}\!\Big(a \;\Big|\; \underbrace{\mu_k(o)}_{\text{mean}}, \; \underbrace{\sigma_k^2(o)}_{\text{variance}}\Big)
+$$
+
+The network $f_\theta(o)$ outputs a vector of $(w_k, \mu_k, \sigma_k)$ for each mixture component. A softmax ensures the weights sum to one; a softplus ensures variances are positive.
+
+**Training** maximises the log-likelihood of the observed actions:
+
+$$
+\mathcal{L}(\theta) = -\mathbb{E}_{(o,a)\sim\mathcal{D}}\Big[\log \sum_{k=1}^{K} w_k(o)\,\mathcal{N}\!\Big(a \;\Big|\; \mu_k(o),\sigma_k^2(o)\Big)\Big]
+$$
+
+**At inference** you can either:
+- sample a component $k \propto w_k(o)$, then sample $a \sim \mathcal{N}(\mu_k, \sigma_k^2)$, or
+- take the *most probable component* mean $\mu_{k^*}$ where $k^* = \arg\max_k w_k(o)$.
+
+**Practical notes:**
+- $K = 5$–$20$ components is usually enough for robot tasks.
+- MDNs can suffer from training instability (NLL → $-\infty$ if a component collapses to zero variance). Use a minimum variance floor (e.g. $\sigma_{\min} = 10^{-4}$ after action normalization to unit scale).
+- Increasing $K$ helps with expressiveness but also increases the risk of a degenerate solution.
+
+> Bishop, C. M. (1994). "Mixture Density Networks." *Aston University Neural Computing Research Group Report NCRG/94/004*.
+
+---
+
+#### Diffusion policies
+
+A **diffusion model** takes a different approach to generative modelling. Rather than parametrising a mixture, it learns to *reverse a noise process*.
+
+The core idea (for a student who knows basic neural networks):
+
+1. **Forward process (fixed, not learned):** Take a clean action $a^0$ and add Gaussian noise in $T$ small steps to produce increasingly noisy versions $a^1, a^2, \ldots, a^T$. After enough steps, $a^T \approx \mathcal{N}(0, I)$.
+
+2. **Reverse process (learned):** Train a neural network $\epsilon_\theta(a^t, t, o)$ to predict *the noise that was added* at step $t$. If the network can undo the noise, it can generate new actions by starting from $a^T \sim \mathcal{N}(0, I)$ and denoising back to $a^0$.
+
+Mathematically, the forward process perturbs $a^0$ as:
+
+$$
+a^t = \sqrt{\bar\alpha_t}\,a^0 + \sqrt{1-\bar\alpha_t}\,\epsilon, \qquad \epsilon \sim \mathcal{N}(0, I)
+$$
+
+where $\bar\alpha_t \in (0,1)$ is a noise schedule that decreases from 1 to 0 as $t$ increases.
+
+The network is trained to predict the noise:
+
+$$
+\mathcal{L}(\theta) = \mathbb{E}_{t, a^0, \epsilon}\Big[\big\|\epsilon - \epsilon_\theta(a^t, t, o)\big\|^2\Big]
+$$
+
+This is just a **mean-squared error loss on the predicted noise** — straightforward to implement with any standard neural network backbone.
+
+**Inference** runs $T_{\text{inf}}$ denoising steps (DDPM uses $T_{\text{inf}}=T$; DDIM can use far fewer, e.g. 10–50):
+
+$$
+a^{t-1} = \frac{1}{\sqrt{\alpha_t}}\Big(a^t - \frac{1-\alpha_t}{\sqrt{1-\bar\alpha_t}}\,\epsilon_\theta(a^t,t,o)\Big) + \sigma_t z, \quad z \sim \mathcal{N}(0,I)
+$$
+
+**Why use diffusion for behaviour cloning?**
+
+- Naturally multimodal — the stochastic sampling can produce different valid actions from the same observation.
+- High-dimensional action spaces (e.g. predicting a full trajectory chunk) are handled well because the loss is just MSE on noise at each step.
+- Empirically outperforms MSE-BC and MDN-BC on contact-rich manipulation benchmarks.
+
+**The key design choice for diffusion policies** is what $\epsilon_\theta$ looks like:
+- A **U-Net** (CNN-based) is common for image observations.
+- A **Transformer** scales better when the observation includes a sequence of images or when predicting multi-step action chunks.
+
+The typical robot diffusion policy predicts a *chunk* of $H$ future actions (e.g. $H=16$) from the current observation. This horizon gives temporal consistency and reduces the need to replan every step. In practice, only the first few actions (e.g. the first $H/4$) are executed before re-querying the policy with the new observation — balancing temporal smoothness against responsiveness to changes in the environment.
+
+**Cost:** each inference call requires $T_{\text{inf}}$ forward passes through the network. With $T_{\text{inf}}=10$ and an efficient sampler (DDIM), this is practical at 10–30 Hz on a GPU.
+
+> Chi, C., Feng, S., Du, Y., Xu, Z., Cousineau, E., Burchfiel, B., and Song, S. (2023). "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion." In *Proceedings of Robotics: Science and Systems (RSS)*.
+
+> Ho, J., Jain, A., and Abbeel, P. (2020). "Denoising Diffusion Probabilistic Models." In *Advances in Neural Information Processing Systems (NeurIPS)*, vol. 33.
+
+---
+
+#### Comparing the approaches
+
+| Method | Multimodal? | Training | Inference speed | Expressiveness |
+|---|---|---|---|---|
+| MSE / Gaussian | No / weak | Simple MSE | Fast (1 forward pass) | Low |
+| Mixture density network | Yes | NLL (can be unstable) | Fast (1 forward pass) | Medium |
+| Diffusion policy | Yes | MSE on noise (stable) | Slower ($T_{\text{inf}}$ passes) | High |
+
+**Rule of thumb:** start with MSE for a baseline, upgrade to MDN or diffusion when you have multimodal demonstrations or high-precision manipulation tasks.
+
+---
+
 #### Sequence problems (RNN / Transformer policies)
 
 In many tasks, the right action depends on history:
@@ -806,7 +937,10 @@ But: it does not remove the need for
 3) Understand what your sensor *actually constrains* about the world.
 4) Implement behaviour cloning loss for continuous actions and explain what it optimizes.
 5) Explain covariate shift and name at least two mitigations (DAgger, residual learning, noise injection).
-6) Make a plan to deploy a learned policy safely.
+6) Explain the difference between a discriminative and a generative model, and why generative models are useful for multimodal robot action distributions.
+7) Describe how a Mixture Density Network works and what loss it minimizes.
+8) Describe the forward and reverse processes in a diffusion model and explain why the training loss is simple (MSE on noise).
+9) Make a plan to deploy a learned policy safely.
 
 ---
 
@@ -821,6 +955,12 @@ But: it does not remove the need for
 > Fischler, M. A. and Bolles, R. C. (1981). "Random Sample Consensus: A Paradigm for Model Fitting with Applications to Image Analysis and Automated Cartography." *Communications of the ACM*, 24(6), 381–395.
 
 > Hartley, R. and Zisserman, A. (2004). *Multiple View Geometry in Computer Vision* (2nd ed.). Cambridge University Press.
+
+> Bishop, C. M. (1994). "Mixture Density Networks." *Aston University Neural Computing Research Group Report NCRG/94/004*.
+
+> Ho, J., Jain, A., and Abbeel, P. (2020). "Denoising Diffusion Probabilistic Models." In *Advances in Neural Information Processing Systems (NeurIPS)*, vol. 33.
+
+> Chi, C., Feng, S., Du, Y., Xu, Z., Cousineau, E., Burchfiel, B., and Song, S. (2023). "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion." In *Proceedings of Robotics: Science and Systems (RSS)*.
 
 ---
 
