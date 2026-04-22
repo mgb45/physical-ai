@@ -420,6 +420,66 @@ A common practical approach:
 - fuse with proprioception,
 - use a temporal model to output actions.
 
+#### Diffusion policies (score matching view)
+
+Mixture models require fixing the number of modes, and a single Gaussian collapses to averaging.
+A more powerful alternative is to represent the action distribution *implicitly* via its **score function** — the gradient of the log-density with respect to the action — and then **integrate** that gradient to produce samples.
+
+**The key object: the score**
+
+Define the score of the (conditional) action distribution:
+
+$$
+s(a \mid o) = \nabla_a \log p(a \mid o)
+$$
+
+The score points in the direction of increasing log-probability: it tells you which way to nudge an action to make it more likely under the expert distribution.
+A neural network $s_\theta(a, o)$ is trained to approximate this gradient field.
+
+**Sampling = integrating the score (Langevin dynamics)**
+
+Given $s_\theta$, you can draw a sample from $p(a \mid o)$ by starting from Gaussian noise and following the estimated gradient, injecting a small amount of noise at each step:
+
+$$
+a_{k+1} = a_k + \frac{\eta}{2}\, s_\theta(a_k, o) + \sqrt{\eta}\;\epsilon_k, \qquad \epsilon_k \sim \mathcal{N}(0, I)
+$$
+
+After $K$ steps (with $\eta$ small), $a_K$ is approximately distributed according to $p(a \mid o)$, regardless of how complex or multimodal that distribution is.
+This is an Euler–Maruyama discretisation of the Langevin stochastic differential equation whose stationary distribution is exactly $p(a \mid o)$.
+
+**Training: how do you learn the score without knowing $p$?**
+
+You cannot evaluate $\nabla_a \log p$ directly, but **denoising score matching** lets you train without it.
+For each demonstration action $a$ add scaled Gaussian noise:
+
+$$
+\tilde{a} = a + \sigma \epsilon, \qquad \epsilon \sim \mathcal{N}(0, I)
+$$
+
+The score of this noisy distribution is:
+
+$$
+\nabla_{\tilde{a}} \log p(\tilde{a}) = -\frac{\tilde{a} - a}{\sigma^2} = -\frac{\epsilon}{\sigma}
+$$
+
+So the training loss is simply:
+
+$$
+\mathcal{L}(\theta) = \mathbb{E}_{(o,a)\sim\mathcal{D},\;\epsilon\sim\mathcal{N}(0,I),\;\sigma}\left[\left\|s_\theta(\tilde{a}, \sigma, o) + \frac{\epsilon}{\sigma}\right\|^2\right]
+$$
+
+The network learns to estimate the direction (and magnitude) needed to move a noisy action back toward the true expert action, across many noise levels $\sigma$.
+
+**Why this matters for robotics**
+
+- **Arbitrary multi-modality** — the gradient field can have multiple basins of attraction; sampling will find them without specifying how many.
+- **High-dimensional actions** — works for full-arm trajectories ("action chunks"), not just single timestep commands.
+- **No mode collapse** — unlike a single Gaussian, the score field does not average over modes.
+
+The cost: inference requires $K$ gradient-field integration steps (typically 10–100), which is slower than a single forward pass. In practice, accelerated samplers (DDIM, consistency models) reduce this to 1–10 steps.
+
+> Chi, C., Feng, S., Du, Y., Xu, Z., Cousineau, E., Burchfiel, B., and Song, S. (2023). "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion." In *Robotics: Science and Systems (RSS)*.
+
 #### Conditioning on goals / tasks
 
 Most real tasks are goal-conditioned:
