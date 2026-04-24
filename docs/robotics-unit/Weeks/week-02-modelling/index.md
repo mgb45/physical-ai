@@ -326,6 +326,388 @@ Unfortunately, if your model is wrong, your controller will be wrong. And your r
 
 > Thrun, S., Burgard, W., and Fox, D. (2005). *Probabilistic Robotics*. MIT Press.
 
+---
+
+# Sources of information: sensors
+
+So far, we have described models as:
+
+$$
+x_{k+1} = f(x_k, u_k)
+$$
+
+But modelling does not stop at motion. A complete model also has to account for **what the robot can observe about the world**.
+
+Robots do not get state directly. They get **sensors**.
+
+And sensors don't give truth — they give **measurements**, at a certain rate, with noise, delays, bias, distortions, missing data, and occasional lies.
+
+A practitioner's view of a sensor is not "it returns numbers", but:
+
+- **What physical quantity is being measured?**
+- **What is the measurement model?**
+- **What are the dominant failure modes?**
+- **What is the timing model (rate, latency, synchronization)?**
+- **How do I calibrate it (intrinsics/extrinsics, bias, scale)?**
+- **How do I fuse it with other sensors?**
+
+## Measurement models (the one equation you will write forever)
+
+A very common abstraction is:
+
+$$
+z_t = h(x_t) + v_t
+$$
+
+- $x_t$ = latent "true" state (pose, velocity, map, object pose, etc.)
+- $z_t$ = measurement at time $t$
+- $h(\cdot)$ = measurement function (often nonlinear)
+- $v_t$ = measurement noise (often approximated as Gaussian)
+
+In practice, a more realistic view is:
+
+$$
+z_t = h(x_{t-t_l}) + b + v_t
+$$
+
+- $t_l$ = latency / time offset (sensors rarely align perfectly with the control loop)
+- $b$ = bias / drift (IMUs, wheel odometry, magnetometers…)
+- $v_t$ = stochastic noise
+
+A big chunk of "robotics that works" is:
+- estimating $x_t$,
+- estimating $b$,
+- and managing timing (time sync).
+
+## Sampling, latency, and synchronization (why your robot looks haunted)
+
+Sensors are discrete-time. Control is discrete-time. But they run at different rates.
+
+- camera: e.g. 30 Hz (33 ms)
+- lidar: e.g. 10 Hz (100 ms)
+- IMU: e.g. 200-2100 Hz (1.0825 ms)
+- wheel encoders: e.g. 50-200 Hz
+
+If your sensor timestamps are wrong by 20-250 ms, that can be catastrophic at speed.
+
+Practical checklist:
+- Do I have **hardware timestamps** or am I using "message arrival time"?
+- Are my sensors **time-synchronized** (PTP, NTP, shared clock, trigger line)?
+- When I fuse, do I **propagate** states to measurement time?
+
+## Calibration: intrinsics vs extrinsics
+
+Two calibration types show up everywhere:
+
+1) **Intrinsics**: parameters *inside* the sensor model  
+   Example (camera): focal length, principal point, distortion coefficients.
+
+2) **Extrinsics**: rigid transform between frames  
+   Example: $T_{\text{base}\rightarrow \text{camera}}$.
+
+This ties directly back to Week 1: homogeneous transforms and frame chaining.
+
+If a sensor lives in frame $S$ and your robot base is frame $B$, you will write:
+
+$$
+p^S = T_{SB}\, p^B
+$$
+
+and you will spend a non-trivial portion of your life estimating $T_{SB}$.
+
+## Noise, bias, drift (and why "Gaussian" is a convenient lie)
+
+Common patterns:
+
+- **white measurement noise**: $v_t \sim \mathcal{N}(0, R)$  
+- **bias**: constant or slowly varying offset  
+- **random walk drift**: $b_{t+1} = b_t + w_t$, $w_t \sim \mathcal{N}(0, Q)$  
+- **outliers**: non-Gaussian, heavy-tailed errors (bad features, sun glare, wheel slip)
+
+For robust systems:
+- detect outliers (gating, RANSAC, Huber loss),
+- downweight bad measurements,
+- and always keep an eye on observability ("can I actually infer what I want from what I measure?").
+
+> Fischler, M. A. and Bolles, R. C. (1981). "Random Sample Consensus: A Paradigm for Model Fitting with Applications to Image Analysis and Automated Cartography." *Communications of the ACM*, 24(6), 381–395.
+
+## Information: what does the sensor *actually constrain*?
+
+A useful mental model: each sensor "observes" a subset of the state.
+
+- wheel odometry: constrains *relative motion* on the ground (until slip)
+- IMU: constrains angular velocity / acceleration (but drifts)
+- GPS: constrains global position (but noisy / blocked indoors)
+- camera: constrains geometry via features (but needs texture / light)
+- lidar: constrains geometry via depth returns (but fails on glass/black surfaces)
+
+Good fusion is about combining complementary constraints.
+
+---
+
+## Vision
+
+Vision is the most information-dense sensor we use, and also the most brittle.
+
+A pinhole camera (simplified) maps a 3D point to pixels:
+
+> Hartley, R. and Zisserman, A. (2004). *Multiple View Geometry in Computer Vision* (2nd ed.). Cambridge University Press.
+
+$$
+\tilde{u} \sim K \,[R\;|\;t] \, \tilde{P}
+$$
+
+- $\tilde{P} = [X, Y, Z, 1]^T$ homogeneous 3D point in some world frame
+- $[R|t]$ camera pose (extrinsics)
+- $K$ intrinsics matrix
+- $\tilde{u} = [u, v, 1]^T$ pixel
+
+### Practitioner tasks in robot vision
+
+**1) Feature-based geometry (classical CV)**  
+- detect features (corners, blobs),
+- match across frames,
+- estimate motion / structure (PnP, essential matrix, bundle adjustment).
+
+Used heavily in:
+- visual odometry,
+- visual-inertial odometry (VIO),
+- SLAM.
+
+**2) Dense perception (learning-heavy)**  
+- semantic segmentation (pixels → class),
+- depth estimation,
+- object detection and tracking,
+- pose estimation (6-DoF object pose).
+
+Used heavily in:
+- manipulation,
+- human-robot interaction,
+- scene understanding.
+
+### Failure modes you need to anticipate
+
+- motion blur (fast motion + low shutter speed)
+- rolling shutter artifacts
+- low texture / repetitive texture
+- lighting changes, glare, saturation
+- dynamic scenes (people, moving objects)
+
+Vision works best when you respect the physics (exposure, optics) *and* your algorithm assumptions.
+
+---
+
+## RGBD sensors
+
+RGBD sensors give you:
+- RGB image + depth map (or a point cloud).
+
+But depth is not "free truth". Common depth modalities:
+- structured light,
+- time-of-flight,
+- active stereo.
+
+Practical concerns:
+- depth noise increases with distance,
+- failures on shiny / transparent / dark surfaces,
+- missing depth (holes) near edges,
+- indoor sunlight issues (for some active sensors).
+
+From depth + intrinsics you can back-project pixels to 3D:
+
+Given pixel $(u,v)$ with depth $d$:
+
+$$
+X = (u - c_x)\frac{d}{f_x}, \quad Y = (v - c_y)\frac{d}{f_y}, \quad Z = d
+$$
+
+Now you can do:
+- plane fitting,
+- grasp point selection,
+- ICP registration,
+- voxel maps.
+
+---
+
+## Tactile sensors
+
+Touch is underrated because it's hard to instrument and interpret, but it's often the only reliable signal in contact-rich tasks.
+
+Common forms:
+- binary contact switches
+- force/torque sensors (wrist F/T)
+- pressure arrays ("tactile skins")
+- joint torque sensing (via motor current + model)
+
+A minimal model in manipulation:
+- measure contact wrench $w = [f_x,f_y,f_z,\tau_x,\tau_y,\tau_z]^T$
+- detect contact, slip, estimate friction / compliance
+
+Practical uses:
+- detect first contact and stop motion safely
+- regulate force (impedance / admittance control)
+- learn contact-rich skills (insertion, wiping, opening doors)
+
+---
+
+## Lidar
+
+Lidar is geometry at scale: ranges + angles → point clouds.
+
+A 2D lidar gives points in a plane; a 3D lidar gives a 3D point cloud.
+
+Measurement model (simplified):
+$$
+z = r + v,\quad v \sim \mathcal{N}(0,\sigma^2(r))
+$$
+
+Practical issues:
+- returns depend on surface reflectivity and angle
+- "no return" is informative (range maxed out)
+- spinning lidars are not instantaneous: the cloud is built over time (motion distortion)
+- glass can be weird; rain/snow can be weird
+
+---
+
+## Positioning sensors
+
+### GPS / GNSS
+
+GNSS gives global position outdoors, but:
+- errors are correlated and environment-dependent,
+- multipath near buildings is nasty,
+- indoors it's mostly dead.
+
+If you have RTK GNSS you can get cm-level accuracy in good conditions, but it becomes a system integration problem (base station, corrections, antenna placement).
+
+### Magnetometers
+
+Magnetometers can give heading *sometimes*, but indoor distortions are common. Treat them carefully (calibrate hard/soft iron, detect anomalies).
+
+---
+
+## Odometric sensors
+
+Wheel odometry is the "default" for mobile robots, but it is not ground truth.
+
+Failure modes:
+- wheel slip (sand, carpet, wet floors)
+- incorrect wheel radius / wheelbase calibration
+- encoder quantization / missed ticks
+- contact loss (one wheel lifted)
+
+This is why we fuse wheel odometry with IMU, lidar, or vision.
+
+---
+
+## Sensor fusion cheat sheet (what fuses well, what fails, what to watch)
+
+### The fusion goal
+
+You want an estimate of some state (often pose + velocity):
+
+$$
+x_t = [\mathbf{p}_t,\;\mathbf{v}_t,\;\boldsymbol{\theta}_t,\;\mathbf{b}_t]
+$$
+
+where $\mathbf{b}_t$ includes sensor biases (IMU bias, gyro drift, etc.).
+
+Nearly all practical fusion fits the pattern:
+
+- **prediction** using a motion model (often IMU integration)
+- **correction** using measurements (camera/lidar/GPS/wheels)
+
+### Typical sensor roles
+
+**IMU**
+- Pros: high rate, observes fast motion
+- Cons: drifts (bias integration)
+- Use it for: short-term motion propagation (prediction)
+
+**Wheel odometry**
+- Pros: simple, good on flat ground with grip
+- Cons: slip, scale errors
+- Use it for: relative planar motion correction (especially indoors)
+
+**Camera (VO/VIO)**
+- Pros: rich information, good in textured environments
+- Cons: lighting, blur, scale ambiguity (monocular), dynamic scenes
+- Use it for: pose correction, map building, object pose
+
+**Lidar**
+- Pros: metric geometry, robust to lighting
+- Cons: glass/black surfaces, motion distortion, lower rate
+- Use it for: scan matching, mapping, stable pose correction
+
+**GPS/GNSS**
+- Pros: global reference outdoors
+- Cons: multipath, outages, low rate
+- Use it for: global position correction / drift reset outdoors
+
+### Three failure modes to diagnose first (in order)
+
+#### 1) Time synchronization bugs
+
+Symptoms:
+- "laggy" correction
+- oscillations / weird overshoot
+- consistent errors that change with speed
+
+Fix:
+- use sensor timestamps, not message receipt time
+- verify camera trigger / IMU clock alignment
+- log and plot time offsets
+
+#### 2) Bad extrinsics (wrong transform between sensor and base)
+
+Symptoms:
+- pose estimate looks fine until you turn, then explodes
+- map "smears" during rotation
+- lidar/camera alignment looks off
+
+Fix:
+- re-check $T_{\text{base}\rightarrow \text{sensor}}$
+- confirm frame conventions (right-hand vs left-hand, axis directions)
+- validate by rotating in place and watching residuals
+
+#### 3) Mis-modelled noise / unhandled outliers
+
+Symptoms:
+- estimator "snaps" to wrong features
+- drift resets erratically
+- performance depends heavily on environment
+
+Fix:
+- add gating / robust loss
+- increase measurement covariance when conditions degrade
+- detect and drop outliers (RANSAC, Huber)
+
+### Practical tuning heuristics
+
+- If you trust a sensor *too much*, it will dominate and break you when it fails.
+- If you trust it *too little*, you drift forever.
+
+When in doubt:
+- start conservative (higher measurement noise),
+- then gradually tighten.
+
+### What to plot when debugging fusion
+
+Plot over time:
+- innovation / residual norms (measurement minus prediction)
+- estimated biases ($b_t$)
+- velocity and yaw rate consistency
+- pose drift vs ground truth (if available)
+- number of inliers / matched features / scan match score
+
+---
+
+## Additional Key Papers
+
+> Fischler, M. A. and Bolles, R. C. (1981). "Random Sample Consensus: A Paradigm for Model Fitting with Applications to Image Analysis and Automated Cartography." *Communications of the ACM*, 24(6), 381–395.
+
+> Hartley, R. and Zisserman, A. (2004). *Multiple View Geometry in Computer Vision* (2nd ed.). Cambridge University Press.
+
 # Coming up next
 
 Next we look at how to control our robot state, subject to these dynamics.
