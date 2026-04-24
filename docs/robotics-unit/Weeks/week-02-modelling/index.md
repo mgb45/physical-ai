@@ -1,18 +1,6 @@
 # Week 2 Modelling mobile robots
 
-Last week we talked about **control**:
-
-> how do we choose inputs $u$ to make the robot behave the way we want?
-
-This week we ask a slightly more fundamental question:
-
-> what actually happens when we apply those inputs?
-
-In other words:
-
-> how does our robot move?
-
-This is the **modelling problem**.
+So far we have thought about the best representation of our robot, and this week we move to modelling how this evolves over time, or in response to commands or actions we send the robot. To help we need to start with thinking about how robots can move, which is often more constrained than the representation we selected to describe their state.
 
 ## Configuration and task space
 
@@ -43,9 +31,7 @@ $$
 
 So it has **1 degree of freedom**, even though it exists in a 3D world.
 
-Why?
-
-Because it is constrained to move along the tracks.
+Why? Because it is constrained to move along the tracks.
 
 ### Configuration vs task space
 
@@ -58,30 +44,28 @@ For the train:
 - task space = 2D or 3D world  
 - configuration space = 1D curve  
 
-So the robot is moving on a **manifold** inside the task space.
+It helps to think that the robot is moving on a *manifold* inside the task space.
 
 ### Fully actuated vs underactuated
 
-Another important idea:
+Another important idea is understanding what we can control on our robot.
 
 - **Fully actuated**: we can directly control all degrees of freedom  
-- **Underactuated**: we cannot  
+- **Underactuated**: we cannot control all degrees of freedom directly, only a subset. 
 
-Example:
+For example:
 
 A hovercraft has:
 - configuration: $$(x, y, \theta)$ → 3 DOF  
 - actuators: 2  
 
-So it is **underactuated**.
-
-This is very common in robotics.
+So it is **underactuated**. This is very common in robotics.
 
 ## Motion models
 
 Now we get to the core idea.
 
-A **motion model** describes how the state evolves:
+A *motion or dynamics model** describes how the state evolves:
 
 $$
 x_{k+1} = f(x_k, u_k)
@@ -131,17 +115,9 @@ Controls:
 - $v$$: forward velocity  
 - $\delta$: steering angle  
 
----
+The key constraint we consider is that the robot **cannot move sideways**. There is no way to directly generate motion in the lateral direction.
 
-### Key constraint
-
-The robot **cannot move sideways**.
-
-There is no way to directly generate motion in the lateral direction.
-
-This is a huge deal.
-
-> it means the system is constrained and underactuated
+This means the system is constrained and underactuated
 
 ### Motion model
 
@@ -159,28 +135,19 @@ $$
 \theta_{k+1} = \theta_k + \frac{v_k}{L} \tan(\delta_k) dt
 $$ 
 
----
-
-### Intuition
-
-- velocity moves you forward in the direction you are facing  
-- steering changes your heading  
-- curved motion comes from combining both  
+This is relatively intuitive, velocity moves you forward in the direction you are facing, steering changes your heading and curved motion comes from combining both.  
 
 ## Differential drive robots
 
-Now let’s look at the robot you will actually use.
+Now let’s look at common wheeled robot model, also suitable for robots with smaller wheel bases and tighter turn radii.
 
-A **differential drive robot** has:
-
-- two wheels  
-- independently controlled  
+A *differential drive robot* has two wheels that are independently controlled.  
 
 > Siegwart, R., Nourbakhsh, I. R., and Scaramuzza, D. (2011). *Introduction to Autonomous Mobile Robots* (2nd ed.). MIT Press.
 
 ### Configuration
 
-Same as before:
+This is the same as before:
 
 $$
 (x, y, \theta)
@@ -215,12 +182,7 @@ $$
 y_{k+1} = y_k + v_k \sin(\theta_k) dt
 $$
 
-### Turning intuition
-
-When turning:
-
-- the robot follows a circular arc  
-- it rotates around an **instantaneous centre of rotation (ICR)**  
+The intuition here is that when turning the robot follows a circular arc and it rotates around an **instantaneous centre of rotation (ICR)**.
 
 The radius is:
 
@@ -293,7 +255,7 @@ We choose:
 
 Different choices → different models → different behaviour
 
-# Simulators as models
+# World models (simulators)
 
 So far, we have been writing down motion models like:
 
@@ -354,7 +316,7 @@ Same idea.
 
 Just a bigger $x$, and a more complicated $f$. All of robotics sits on top of modelling.
 
-Unfortunately, f your model is wrong, your controller will be wrong. And your robot will let you know.
+Unfortunately, if your model is wrong, your controller will be wrong. And your robot will let you know.
 
 ## Key Papers
 
@@ -366,10 +328,6 @@ Unfortunately, f your model is wrong, your controller will be wrong. And your ro
 
 # Coming up next
 
-So far we have assumed we know where the robot is.
+Next we look at how to control our robot state, subject to these dynamics.
 
-Next:
-
-> how do we estimate $x$ in the real world?
-
-→ localisation and SLAM
+→ Control
