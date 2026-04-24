@@ -18,6 +18,239 @@ If you only remember one message:
 
 ---
 
+## Deep learning for perception: from sensors to states
+
+Before we talk about how to learn *policies*, we need to talk about how to turn raw sensor data into something useful.
+
+In classical robotics, perception pipelines were hand-engineered: a human decided which features to extract, which thresholds to apply, and how to fuse sensor modalities. Deep learning changed this: we can now train end-to-end models that learn a mapping from pixels (or point clouds, or spectrograms) directly to the quantities we care about.
+
+The canonical deep-learning perception pipeline looks like:
+
+$$
+\text{sensor data} \xrightarrow{f_\phi} \text{features} \xrightarrow{g_\psi} \text{state / label}
+$$
+
+where $f_\phi$ is a learned feature extractor (backbone) and $g_\psi$ is a task-specific head. What differs between tasks is *what* $g_\psi$ predicts.
+
+---
+
+### Task taxonomy: classification, regression, segmentation
+
+The three most common perception tasks in robotics map onto three standard supervised-learning problems.
+
+#### Classification
+
+**What we want:** assign a discrete label from a fixed set.
+
+**Robotics examples:**
+- *Traffic light state* — predict \{red, yellow, green\}.
+- *Object category* — predict which object class is present.
+- *Scene context* — predict road type, terrain type, indoor/outdoor.
+
+**Output:** a probability distribution over $C$ classes, produced by a softmax head:
+
+$$
+\hat{y} = \text{softmax}(W h + b), \qquad \hat{y} \in \mathbb{R}^C
+$$
+
+**Loss:** cross-entropy between prediction and one-hot ground-truth label $y$:
+
+$$
+\mathcal{L}_\text{cls} = -\sum_{c=1}^C y_c \log \hat{y}_c
+$$
+
+**Backbone choice:** ResNet, EfficientNet, or a Vision Transformer (ViT) pre-trained on ImageNet, fine-tuned on task data.
+
+#### Regression
+
+**What we want:** predict a continuous quantity.
+
+**Robotics examples:**
+- *Object pose estimation* — predict 6-DoF pose $(x, y, z, \phi, \theta, \psi)$ of an object in the camera frame. Used downstream in grasping.
+- *Grasp point prediction* — predict the pixel location (and optionally depth, width, angle) of where to grasp an object.
+- *Keypoint detection* — predict 2-D image coordinates of semantic landmarks on an object.
+
+**Output:** a vector $\hat{y} \in \mathbb{R}^d$ produced by a fully-connected head after the backbone features.
+
+**Loss (baseline):** mean squared error:
+
+$$
+\mathcal{L}_\text{reg} = \|\hat{y} - y\|^2
+$$
+
+For orientation, MSE on Euler angles is problematic (gimbal lock, discontinuities at $\pm\pi$). In practice, represent rotations as rotation matrices or unit quaternions and use a geodesic / angular loss, or predict the 6D continuous representation.
+
+For grasp quality maps, the GG-CNN family predicts a per-pixel grasp-quality, angle, and width map in a single forward pass, making grasp synthesis fast enough for reactive control.
+
+> Redmon, J., and Angelova, A. (2015). "Real-time grasp detection using convolutional neural networks." In *ICRA*.
+
+> Morrison, D., Corke, P., and Leitner, J. (2020). "Learning robust, real-time, reactive robotic grasping." *The International Journal of Robotics Research*, 39(2–3), 183–201.
+
+#### Segmentation
+
+**What we want:** assign a label (or mask) to every pixel (or point in 3-D).
+
+Three related sub-tasks:
+
+| Sub-task | Output | Robotics use |
+|---|---|---|
+| Semantic segmentation | Per-pixel class label | Drivable surface, lane marking classification |
+| Instance segmentation | Per-pixel class + instance ID | Individual object manipulation |
+| Panoptic segmentation | Semantic + instance, unified | Full scene understanding |
+
+**Drivability and lane classification** are typical semantic segmentation tasks:
+- classes: `{road, lane-marking, sidewalk, vehicle, pedestrian, background}`
+- the network predicts a class probability for every pixel
+- downstream, a robot can reason about which pixels form a traversable corridor
+
+**Loss:** standard cross-entropy summed over pixels:
+
+$$
+\mathcal{L}_\text{seg} = -\frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W} \sum_{c=1}^C y_{ijc}\log \hat{y}_{ijc}
+$$
+
+For class-imbalanced scenes (road is 90 % of pixels), weighted or focal variants help.
+
+---
+
+### Common architectures
+
+#### Masked R-CNN (instance segmentation from images)
+
+Masked R-CNN extends Faster R-CNN with an additional mask prediction branch.
+
+> He, K., Gkioxari, G., Dollár, P., and Girshick, R. (2017). "Mask R-CNN." In *ICCV*.
+
+The pipeline has three stages:
+
+1. **Backbone + FPN** — a deep CNN (e.g., ResNet-50) extracts multi-scale feature maps via a Feature Pyramid Network.
+2. **Region Proposal Network (RPN)** — a sliding-window classifier proposes candidate bounding boxes ("regions of interest", RoIs) at multiple scales.
+3. **Per-RoI heads** — for each proposed region:
+   - a classification head predicts the object class,
+   - a regression head refines the box coordinates,
+   - a mask head predicts a binary foreground/background mask for every pixel inside the box.
+
+The three losses are trained jointly:
+
+$$
+\mathcal{L} = \mathcal{L}_\text{cls} + \mathcal{L}_\text{box} + \mathcal{L}_\text{mask}
+$$
+
+In robotics, Masked R-CNN is used to:
+- segment individual objects on a cluttered tabletop prior to grasping,
+- track objects across frames,
+- provide region proposals for 6-DoF pose estimators.
+
+#### SAM — Segment Anything Model
+
+SAM is a promptable segmentation foundation model trained on 1 billion+ masks.
+
+> Kirillov, A., Mintun, E., Ravi, N., Mao, H., et al. (2023). "Segment Anything." In *ICCV*.
+
+Architecture:
+- **Image encoder** — a heavyweight Vision Transformer (ViT-H) runs once per image to produce a dense embedding.
+- **Prompt encoder** — encodes sparse prompts (points, bounding boxes) or dense prompts (rough masks) into a prompt embedding.
+- **Mask decoder** — a lightweight transformer decoder predicts one or more masks from the image embedding + prompt embedding, with associated confidence scores.
+
+Key properties for robotics:
+- *Zero-shot*: given a click or box prompt it can segment any object without task-specific fine-tuning.
+- *Amortised cost*: the image encoder (expensive) runs once; the decoder (cheap) can be called interactively at low latency.
+- *SAM 2* extends this to video, propagating masks temporally — useful for object tracking during manipulation.
+
+A common robotics workflow: detect an object with a fast open-vocabulary detector (e.g., OWL-ViT or Grounding DINO, prompted with a text label), then pass the resulting bounding box as a prompt to SAM to get a clean instance mask.
+
+#### PointNet (3-D point cloud processing)
+
+Cameras give 2-D images; depth cameras and LiDAR give 3-D point clouds. A point cloud is a set of $N$ 3-D points $\{p_i\} \subset \mathbb{R}^3$ (possibly with additional features like colour or intensity). Unlike images, point clouds have no fixed spatial ordering.
+
+PointNet is the canonical deep network for unordered 3-D point sets.
+
+> Qi, C. R., Su, H., Mo, K., and Guibas, L. J. (2017). "PointNet: Deep learning on point sets for 3D classification and segmentation." In *CVPR*.
+
+Key ideas:
+
+1. **Permutation invariance** — apply a shared MLP independently to each point (a point-wise function), then aggregate with a symmetric function (max-pooling):
+
+$$
+f(\{p_1,\ldots,p_N\}) = g\!\left(\max_{i=1}^N h(p_i)\right)
+$$
+
+where $h$ is a point-wise MLP and $g$ is a classification/regression head. Because max-pooling is symmetric, the output does not depend on point ordering.
+
+2. **T-Net (spatial transformer)** — a mini-network predicts a $3 \times 3$ (and optionally $64 \times 64$) alignment transform, applied to the point cloud before feature extraction. This provides some invariance to rigid-body transformations.
+
+Outputs:
+- **Global feature** → classification (object category from LiDAR scan).
+- **Per-point features** (global feature concatenated with local features) → segmentation of each point.
+
+**PointNet++ (Qi et al., 2017)** extends PointNet with hierarchical local grouping (ball-query neighborhoods), capturing local geometry that the original network misses.
+
+In robotics:
+- classify or detect objects in LiDAR sweeps (autonomous driving),
+- estimate 6-DoF object pose from a depth image converted to a point cloud,
+- segment a robot's own body points from environmental points.
+
+#### Multimodal models
+
+Real robots have multiple sensor streams: RGB cameras, depth cameras, LiDAR, IMU, force-torque sensors, proprioception. No single sensor is sufficient.
+
+**Fusion strategies:**
+
+| Strategy | Where | When to use |
+|---|---|---|
+| Early fusion | Concatenate raw inputs | Inputs are spatially aligned (e.g., RGB-D) |
+| Late fusion | Combine high-level features or predictions | Modalities have very different scales / rates |
+| Cross-attention fusion | Transformer cross-attention between modalities | Rich semantic alignment needed (e.g., vision + language) |
+
+**Common multimodal pipelines in robotics:**
+
+*Vision + language (VLMs applied to robotics):*
+Large vision-language models (CLIP, BLIP-2, LLaVA) are pre-trained on image–text pairs at internet scale. The shared embedding space means you can query "find the red mug" and retrieve the matching image region. In manipulation, this enables open-vocabulary object detection: the robot receives a language goal and the VLM grounds it to a region in the image.
+
+*RGB-D fusion for pose estimation:*
+Encode the RGB image with a 2-D CNN (for texture/appearance) and the depth image or point cloud with PointNet (for geometry), then concatenate features before a pose regression head. The two streams are complementary: texture helps distinguish similar shapes; geometry helps in low-texture or adverse-lighting conditions.
+
+*LiDAR + camera fusion for outdoor autonomy:*
+Project LiDAR points onto the image plane (using camera intrinsics and extrinsics) to decorate each 3-D point with an RGB value. Alternatively, project image features back onto LiDAR points (e.g., PointPainting). Multi-modal networks like BEVFusion fuse everything in a common bird's-eye-view (BEV) representation.
+
+> Liu, Z., Tang, H., Amini, A., Yang, X., Mao, H., Rus, D., and Han, S. (2023). "BEVFusion: Multi-task multi-sensor fusion with unified bird's-eye view representation." In *ICRA*.
+
+---
+
+### Putting it together: typical sensor-to-state pipelines
+
+**Autonomous driving example:**
+
+$$
+\underbrace{\text{RGB camera}}_{\text{front/side}} \xrightarrow{\text{SegNet / DeepLab}} \underbrace{\text{drivable mask + lanes}}_{\text{semantic}}
+$$
+
+$$
+\underbrace{\text{LiDAR}}_{\text{360°}} \xrightarrow{\text{PointPillars / CenterPoint}} \underbrace{\text{3-D bounding boxes}}_{\text{objects}}
+$$
+
+$$
+\underbrace{\text{All sensors}} \xrightarrow{\text{fusion + tracking}} \underbrace{x_t = [\text{ego pose, lane position, object list}]}_{\text{state for planning}}
+$$
+
+**Tabletop manipulation example:**
+
+$$
+\underbrace{\text{RGB-D camera}} \xrightarrow{\text{Masked R-CNN / SAM}} \underbrace{\text{instance masks}}
+$$
+
+$$
+\underbrace{\text{instance mask + depth}} \xrightarrow{\text{pose estimator (e.g. FoundPose, GDR-Net)}} \underbrace{T_{\text{obj}}^{\text{cam}} \in SE(3)}_{\text{6-DoF object pose}}
+$$
+
+$$
+\underbrace{T_{\text{obj}}^{\text{cam}}} \xrightarrow{\text{grasp planner / GG-CNN}} \underbrace{(x_g, y_g, z_g, \theta_g)}_{\text{grasp point and angle}}
+$$
+
+In both cases, the output is a structured state that a planner or policy can act on — connecting deep learning perception back to the control and planning frameworks from earlier weeks.
+
+---
+
 ## Learning from demonstration
 
 Now the “learning” part.
@@ -498,9 +731,12 @@ But: it does not remove the need for
 
 ## Summary: what you should be able to do after this week
 
-1) Implement behaviour cloning loss for continuous actions and explain what it optimizes.
-2) Explain covariate shift and name at least two mitigations (DAgger, residual learning, noise injection).
-3) Make a plan to deploy a learned policy safely.
+1. Explain the three main deep-learning perception task types (classification, regression, segmentation) and give a robotics example of each.
+2. Describe the architecture and typical use case of Masked R-CNN, SAM, and PointNet.
+3. Sketch a sensor-to-state pipeline for a manipulation or driving scenario.
+4. Implement behaviour cloning loss for continuous actions and explain what it optimizes.
+5. Explain covariate shift and name at least two mitigations (DAgger, residual learning, noise injection).
+6. Make a plan to deploy a learned policy safely.
 
 ---
 
@@ -511,6 +747,18 @@ But: it does not remove the need for
 > Ijspeert, A. J., Nakanishi, J., Hoffmann, H., Pastor, P., and Schaal, S. (2013). "Dynamical Movement Primitives: Learning Attractor Models for Motor Behaviors." *Neural Computation*, 25(2), 328–373.
 
 > Ross, S., Gordon, G., and Bagnell, D. (2011). "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning." In *Proceedings of AISTATS*, pp. 627–635.
+
+> He, K., Gkioxari, G., Dollár, P., and Girshick, R. (2017). "Mask R-CNN." In *IEEE International Conference on Computer Vision (ICCV)*.
+
+> Kirillov, A., Mintun, E., Ravi, N., Mao, H., et al. (2023). "Segment Anything." In *IEEE International Conference on Computer Vision (ICCV)*.
+
+> Qi, C. R., Su, H., Mo, K., and Guibas, L. J. (2017). "PointNet: Deep learning on point sets for 3D classification and segmentation." In *IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*.
+
+> Qi, C. R., Yi, L., Su, H., and Guibas, L. J. (2017). "PointNet++: Deep hierarchical feature learning on point sets in a metric space." In *Advances in Neural Information Processing Systems (NeurIPS)*.
+
+> Morrison, D., Corke, P., and Leitner, J. (2020). "Learning robust, real-time, reactive robotic grasping." *The International Journal of Robotics Research*, 39(2–3), 183–201.
+
+> Liu, Z., Tang, H., Amini, A., Yang, X., Mao, H., Rus, D., and Han, S. (2023). "BEVFusion: Multi-task multi-sensor fusion with unified bird's-eye view representation." In *IEEE International Conference on Robotics and Automation (ICRA)*.
 
 ---
 
