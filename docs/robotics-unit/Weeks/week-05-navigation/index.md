@@ -849,8 +849,6 @@ We now have:
 - estimators
 - planners (global and local)
 
-Next:
+Next, we look at perception and learning — how robots can sense and interpret the world around them.
 
-> how do we *learn* these instead of hand-designing them?
-
-→ reinforcement learning
+→ [Week 6: Perception and Learning](../week-08-perception-and-learning/)

@@ -1,6 +1,6 @@
 # Week 8: Articulated robots and dynamics
 
-Last week we covered [kinematics](../week-07-kinematics/): the geometry of how joint angles map to end-effector poses. We knew where the arm was, and we knew how to get the tip to a target. But we were ignoring something important.
+Last week we covered [kinematics](../week-06-kinematics/): the geometry of how joint angles map to end-effector poses. We knew where the arm was, and we knew how to get the tip to a target. But we were ignoring something important.
 
 > what actually makes the arm move?
 

@@ -593,4 +593,4 @@ Unfortunately, if your model is wrong, your controller will be wrong. And your r
 
 Next we look at how to control our robot state, subject to these dynamics.
 
-→ Control
+→ [Week 3: Control](../week-03-control/)

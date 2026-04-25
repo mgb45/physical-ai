@@ -1,6 +1,6 @@
 # Week 7: Articulated robots and kinematics
 
-Last week we looked at [perception and learning](../week-06-perception-and-learning/). This week we take a step back and look at a different kind of robot entirely.
+Last week we looked at [perception and learning](../week-08-perception-and-learning/). This week we take a step back and look at a different kind of robot entirely.
 
 So far, we have been modelling **ground vehicles**: robots that move around in the world. But what about robots that **manipulate** things?
 
@@ -193,4 +193,4 @@ But getting there requires more than geometry. Next week we ask: what does it ac
 
 We know the geometry. Now we need the physics.
 
-→ forces, inertia, and the **dynamics** of articulated robots
+→ [Week 8: Dynamics](../week-07-dynamics/)

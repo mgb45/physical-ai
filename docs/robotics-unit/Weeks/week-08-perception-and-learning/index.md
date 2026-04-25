@@ -766,4 +766,4 @@ But: it does not remove the need for
 
 Perception and learning are powerful, but they don’t replace structure.
 
-→ Next we make robots more complex: **articulated systems** and how to represent and control them.
+→ [Week 7: Kinematics](../week-06-kinematics/)

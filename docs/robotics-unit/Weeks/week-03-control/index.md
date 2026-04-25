@@ -158,4 +158,6 @@ This is **Model Predictive Control (MPC)**. This is powerful because it naturall
 
 # Coming up next
 
-We have been assuming we *know* the dynamics. Next we model how robots move.
+We have been assuming we can measure the state of the robot perfectly. Next, we look at what happens when we can't.
+
+→ [Week 4: State Estimation](../week-04-state-estimation/)

@@ -471,3 +471,12 @@ Plot over time:
 
 > Thrun, S., Burgard, W., and Fox, D. (2005). *Probabilistic Robotics*. MIT Press.
 
+
+
+---
+
+# Coming up next
+
+We can now estimate where our robot is. Next, we use this to navigate.
+
+→ [Week 5: Navigation](../week-05-navigation/)
