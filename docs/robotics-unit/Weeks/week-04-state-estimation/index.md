@@ -353,6 +353,112 @@ All of these filters implement the same recursive Bayes estimation framework. Th
 
 Each method trades off accuracy, flexibility, and computational cost, and the right choice depends on the characteristics of the system being modelled. The estimation approach and abstraction also affects what we can control or how we plan so is an important design choice in any robotic application.
 
+## Sensor fusion cheat sheet (what fuses well, what fails, what to watch)
+
+Sensor fusion is not a separate problem from state estimation, it is the same recursive Bayes estimation framework with multiple sensor streams. We still make a prediction using the motion model and then perform correction using measurements; we simply repeat or combine updates from different sensors under the same posterior belief.
+
+In other words, we are still estimating distributions like $p(x_t \mid z_{1:t})$, but now $z_t$ may include measurements from wheel odometry, IMU, camera, lidar, GNSS and other sources with different rates and noise characteristics.
+
+### The fusion goal
+
+You want an estimate of some state (often pose + velocity):
+
+$$
+x_t = [\mathbf{p}_t,\;\mathbf{v}_t,\;\boldsymbol{\theta}_t,\;\mathbf{b}_t]
+$$
+
+where $\mathbf{b}_t$ includes sensor biases (IMU bias, gyro drift, etc.).
+
+Nearly all practical fusion fits the pattern:
+
+- **prediction** using a motion model (often IMU integration)
+- **correction** using measurements (camera/lidar/GPS/wheels)
+
+### Typical sensor roles
+
+**IMU**
+- Pros: high rate, observes fast motion
+- Cons: drifts (bias integration)
+- Use it for: short-term motion propagation (prediction)
+
+**Wheel odometry**
+- Pros: simple, good on flat ground with grip
+- Cons: slip, scale errors
+- Use it for: relative planar motion correction (especially indoors)
+
+**Camera (VO/VIO)**
+- Pros: rich information, good in textured environments
+- Cons: lighting, blur, scale ambiguity (monocular), dynamic scenes
+- Use it for: pose correction, map building, object pose
+
+**Lidar**
+- Pros: metric geometry, robust to lighting
+- Cons: glass/black surfaces, motion distortion, lower rate
+- Use it for: scan matching, mapping, stable pose correction
+
+**GPS/GNSS**
+- Pros: global reference outdoors
+- Cons: multipath, outages, low rate
+- Use it for: global position correction / drift reset outdoors
+
+### Three failure modes to diagnose first (in order)
+
+#### 1) Time synchronization bugs
+
+Symptoms:
+- "laggy" correction
+- oscillations / weird overshoot
+- consistent errors that change with speed
+
+Fix:
+- use sensor timestamps, not message receipt time
+- verify camera trigger / IMU clock alignment
+- log and plot time offsets
+
+#### 2) Bad extrinsics (wrong transform between sensor and base)
+
+Symptoms:
+- pose estimate looks fine until you turn, then explodes
+- map "smears" during rotation
+- lidar/camera alignment looks off
+
+Fix:
+- re-check $T_{\text{base}\rightarrow \text{sensor}}$
+- confirm frame conventions (right-hand vs left-hand, axis directions)
+- validate by rotating in place and watching residuals
+
+#### 3) Mis-modelled noise / unhandled outliers
+
+Symptoms:
+- estimator "snaps" to wrong features
+- drift resets erratically
+- performance depends heavily on environment
+
+Fix:
+- add gating / robust loss
+- increase measurement covariance when conditions degrade
+- detect and drop outliers (RANSAC, Huber)
+
+### Practical tuning heuristics
+
+- If you trust a sensor *too much*, it will dominate and break you when it fails.
+- If you trust it *too little*, you drift forever.
+
+When in doubt:
+- start conservative (higher measurement noise),
+- then gradually tighten.
+
+### What to plot when debugging fusion
+
+Plot over time:
+- innovation / residual norms (measurement minus prediction)
+- estimated biases ($b_t$)
+- velocity and yaw rate consistency
+- pose drift vs ground truth (if available)
+- number of inliers / matched features / scan match score
+
+---
+
 ## Key Papers
 
 > Kalman, R. E. (1960). "A New Approach to Linear Filtering and Prediction Problems." *Journal of Basic Engineering*, 82(1), 35–45.
