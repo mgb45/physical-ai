@@ -1,4 +1,4 @@
-# Week 6 Robot perception and learning
+# Week 8: Robot perception and learning
 
 In Week 2 we covered how sensors work and what information they provide. This week we build on that foundation.
 

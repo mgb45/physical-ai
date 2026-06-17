@@ -1,4 +1,4 @@
-# Week 10 Human robot interaction
+# Week 10: Human robot interaction
 
 So far, we have designed robots that operate alone. Now we put a human in the loop.
 

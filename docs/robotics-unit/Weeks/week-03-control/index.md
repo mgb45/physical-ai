@@ -1,4 +1,4 @@
-# Week 3 Robot control
+# Week 3: Robot control
 
 Last week we talked about how to model a robot: how its state evolves over time in response to control inputs. This week we ask the next natural question: how do we actually make the robot move the way we want?
 

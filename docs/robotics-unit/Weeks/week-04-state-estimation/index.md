@@ -1,4 +1,4 @@
-# Week 4 Localisation and state estimation
+# Week 4: Localisation and state estimation
 
 ## Uncertainty and beliefs
 

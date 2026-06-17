@@ -1,4 +1,4 @@
-# Week 5 Navigation and mapping
+# Week 5: Navigation and mapping
 
 So far, we have defined state, built models of how a robot moves and designed controllers that choose actions. Throughout that discussion, however, we have been quietly relying on a very strong assumption: we know where the robot is and what the world looks like. This week we remove that assumption.
 

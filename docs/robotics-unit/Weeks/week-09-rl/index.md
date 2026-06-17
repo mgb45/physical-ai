@@ -1,4 +1,4 @@
-# Week 9 Reinforcement learning
+# Week 9: Reinforcement learning
 
 So far we have assumed we have a model of our robot, and used it to compute good controls. But what if we don't have that model? What if the cost function is too complex to write down? What if we just want the robot to *figure it out*?
 
