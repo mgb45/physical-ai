@@ -1,208 +1,166 @@
 # Week 5 Navigation and mapping
 
-So far, we have:
-
-- defined state
-- built models of how the robot moves
-- designed controllers to choose actions
-
-But we have been quietly assuming something pretty unrealistic:
-
-> we know where the robot is
-
-This week we remove that assumption.
-
----
+So far, we have defined state, built models of how a robot moves and designed controllers that choose actions. Throughout that discussion, however, we have been quietly relying on a very strong assumption: we know where the robot is and what the world looks like. This week we remove that assumption.
 
 ## SLAM
 
-Let's start with the core problem:
+Let’s start with the core problem:
 
-> how do I know where I am if I don't know where anything is?
+> how do I know where I am if I don’t know where anything is?
 
-This is the **SLAM problem**:
+This is the **SLAM problem**, or **simultaneous localisation and mapping**. In SLAM, the robot must estimate its own state and the map of the environment at the same time.
 
-> **Simultaneous Localisation and Mapping**
+The difficulty is that these two estimates depend on each other. To build a map, the robot needs to know where it is. To know where it is, the robot needs a map. This creates a circular dependency.
 
-We want to estimate:
-
-- the robot state
-- the map of the environment
-
-at the same time.
-
----
-
-### Why is this hard?
-
-Because:
-
-- to build a map, I need to know where I am
-- to know where I am, I need a map
-
-So we get a circular dependency.
-
----
-
-### The key idea
-
-We solve both problems **jointly**.
-
-As the robot moves:
-
-- it updates its belief about its position
-- it updates its belief about the map
-- each helps improve the other
+The key idea in SLAM is to solve both problems **jointly**. As the robot moves, it updates its belief about its position and its belief about the map. Each estimate supports and improves the other.
 
 ---
 
 ## Joint state estimation
 
-Instead of estimating just the robot state:
+Lets illustrate this for a robot keeping track of its state using a topological map of N landmarks. Instead of estimating only the robot state,
 
 $$
-x_r = (x, y, \theta)
+x_r = (x, y, \theta),
 $$
 
-we estimate a **joint state** that stacks the robot pose and all $N$ landmark positions:
+we estimate a **joint state** that stacks the robot pose together with all $N$ landmark positions:
 
 $$
-\mathbf{x} = \begin{pmatrix} x_r \\ m_1 \\ m_2 \\ \vdots \\ m_N \end{pmatrix} \in \mathbb{R}^{3 + 2N}
+\mathbf{x} = \begin{pmatrix} x_r \\ m_1 \\ m_2 \\ \vdots \\ m_N \end{pmatrix} \in \mathbb{R}^{3 + 2N}.
 $$
 
-where each landmark $m_i = (m_{i,x},\, m_{i,y})^\top$ is a 2D position in the world frame.
+Each landmark $m_i = (m_{i,x},\, m_{i,y})^\top$ is a 2D position in the world frame.
 
 We maintain a Gaussian belief over this joint state:
 
 $$
-p(\mathbf{x}_k \mid z_{1:k}, u_{1:k}) = \mathcal{N}(\boldsymbol{\mu}_k,\, \boldsymbol{\Sigma}_k)
+p(\mathbf{x}_k \mid z_{1:k}, u_{1:k}) = \mathcal{N}(\boldsymbol{\mu}_k,\, \boldsymbol{\Sigma}_k).
 $$
 
-The covariance $\boldsymbol{\Sigma}_k$ has a block structure:
+The covariance matrix $\boldsymbol{\Sigma}_k$ has a block structure:
 
 $$
-\boldsymbol{\Sigma}_k = \begin{pmatrix} \Sigma_{rr} & \Sigma_{rm_1} & \cdots & \Sigma_{rm_N} \\ \Sigma_{m_1 r} & \Sigma_{m_1 m_1} & \cdots & \Sigma_{m_1 m_N} \\ \vdots & & \ddots & \vdots \\ \Sigma_{m_N r} & \cdots & & \Sigma_{m_N m_N} \end{pmatrix}
+\boldsymbol{\Sigma}_k = \begin{pmatrix} \Sigma_{rr} & \Sigma_{rm_1} & \cdots & \Sigma_{rm_N} \\ \Sigma_{m_1 r} & \Sigma_{m_1 m_1} & \cdots & \Sigma_{m_1 m_N} \\ \vdots & & \ddots & \vdots \\ \Sigma_{m_N r} & \cdots & & \Sigma_{m_N m_N} \end{pmatrix}.
 $$
 
-The off-diagonal blocks $\Sigma_{r m_i}$ capture the **correlations between robot pose and landmark positions**. This is the key insight: once the robot returns to a known landmark, uncertainty in the entire map is reduced.
+The off-diagonal blocks, such as $\Sigma_{r m_i}$, capture the **correlations between robot pose and landmark positions**. This is the key insight. Once the robot returns to a known landmark, uncertainty in the entire map can be reduced because the robot pose and landmark estimates are statistically linked.
 
 ---
 
 ## EKF SLAM
 
-One concrete implementation uses the **Extended Kalman Filter (EKF)** to maintain this Gaussian belief.
-
----
+One concrete implementation of SLAM uses the **Extended Kalman Filter (EKF)** to maintain the Gaussian belief over robot pose and landmarks.
 
 ### Predict step
 
-The robot moves according to a nonlinear motion model (e.g. differential drive):
+During the prediction step, the robot moves according to a nonlinear motion model, such as a differential-drive model:
 
 $$
-x_{k+1} = f(x_{r,k},\, u_k) + \epsilon_k, \qquad \epsilon_k \sim \mathcal{N}(0, Q_k)
+x_{k+1} = f(x_{r,k},\, u_k) + \epsilon_k, \qquad \epsilon_k \sim \mathcal{N}(0, Q_k).
 $$
 
-The landmarks are stationary, so the full state prediction is:
+The landmarks are assumed to be stationary. This means the robot part of the state changes, while the landmark estimates remain the same:
 
 $$
-\overline{\boldsymbol{\mu}}_k = \begin{pmatrix} f(\mu_{r,k-1},\, u_k) \\ \mu_{m_1} \\ \vdots \\ \mu_{m_N} \end{pmatrix}
+\overline{\boldsymbol{\mu}}_k = \begin{pmatrix} f(\mu_{r,k-1},\, u_k) \\ \mu_{m_1} \\ \vdots \\ \mu_{m_N} \end{pmatrix}.
 $$
 
-We linearise the motion model with the Jacobian:
+Because the motion model is nonlinear, we linearise it using the Jacobian
 
 $$
-F_k = \left.\frac{\partial f}{\partial x_r}\right|_{\mu_{r,k-1},\, u_k}
+F_k = \left.\frac{\partial f}{\partial x_r}\right|_{\mu_{r,k-1},\, u_k}.
 $$
 
-and embed it into the full-state Jacobian:
+This robot-state Jacobian is then embedded into the full-state Jacobian:
 
 $$
-\mathbf{F}_k = \begin{pmatrix} F_k & 0 \\ 0 & I_{2N} \end{pmatrix}
+\mathbf{F}_k = \begin{pmatrix} F_k & 0 \\ 0 & I_{2N} \end{pmatrix}.
 $$
 
-The predicted covariance is then:
+The predicted covariance becomes
 
 $$
-\overline{\boldsymbol{\Sigma}}_k = \mathbf{F}_k\, \boldsymbol{\Sigma}_{k-1}\, \mathbf{F}_k^\top + \mathbf{Q}_k
+\overline{\boldsymbol{\Sigma}}_k = \mathbf{F}_k\, \boldsymbol{\Sigma}_{k-1}\, \mathbf{F}_k^\top + \mathbf{Q}_k,
 $$
 
-where $\mathbf{Q}_k$ has $Q_k$ in the robot block and zeros elsewhere (landmarks do not move).
-
----
+where $\mathbf{Q}_k$ contains $Q_k$ in the robot block and zeros elsewhere, since landmarks do not move.
 
 ### Measurement model
 
-Suppose the robot observes landmark $i$ with a range-bearing sensor. The expected observation is:
+Now suppose the robot observes landmark $i$ using a range-bearing sensor. The expected observation is
 
 $$
-\hat{z}_k^i = h^i(\overline{\boldsymbol{\mu}}_k) = \begin{pmatrix} \sqrt{(\mu_{m_i,x} - \bar{\mu}_x)^2 + (\mu_{m_i,y} - \bar{\mu}_y)^2} \\ \text{atan2}(\mu_{m_i,y} - \bar{\mu}_y,\; \mu_{m_i,x} - \bar{\mu}_x) - \bar{\mu}_\theta \end{pmatrix}
+\hat{z}_k^i = h^i(\overline{\boldsymbol{\mu}}_k) = \begin{pmatrix} \sqrt{(\mu_{m_i,x} - \bar{\mu}_x)^2 + (\mu_{m_i,y} - \bar{\mu}_y)^2} \\ \text{atan2}(\mu_{m_i,y} - \bar{\mu}_y,\; \mu_{m_i,x} - \bar{\mu}_x) - \bar{\mu}_\theta \end{pmatrix}.
 $$
 
-The Jacobian $H_k^i$ maps the full state to the observation space. It is sparse: only the columns corresponding to the robot pose and landmark $i$ are non-zero:
+The Jacobian $H_k^i$ maps the full state to the observation space:
 
 $$
-H_k^i = \left.\frac{\partial h^i}{\partial \mathbf{x}}\right|_{\overline{\boldsymbol{\mu}}_k}
+H_k^i = \left.\frac{\partial h^i}{\partial \mathbf{x}}\right|_{\overline{\boldsymbol{\mu}}_k}.
 $$
 
----
+This matrix is sparse. Only the columns corresponding to the robot pose and landmark $i$ are non-zero, because a single landmark observation directly depends only on the robot pose and that landmark.
 
 ### Update step
 
-For each observed landmark $i$:
+For each observed landmark $i$, we first compute the innovation, which is the difference between the actual observation and the expected observation:
 
 $$
-y_k^i = z_k^i - \hat{z}_k^i \qquad \text{(innovation)}
+y_k^i = z_k^i - \hat{z}_k^i.
 $$
 
-$$
-S_k^i = H_k^i\, \overline{\boldsymbol{\Sigma}}_k\, (H_k^i)^\top + R_k \qquad \text{(innovation covariance)}
-$$
+The innovation covariance is
 
 $$
-K_k^i = \overline{\boldsymbol{\Sigma}}_k\, (H_k^i)^\top\, (S_k^i)^{-1} \qquad \text{(Kalman gain)}
+S_k^i = H_k^i\, \overline{\boldsymbol{\Sigma}}_k\, (H_k^i)^\top + R_k,
 $$
+
+and the Kalman gain is
+
+$$
+K_k^i = \overline{\boldsymbol{\Sigma}}_k\, (H_k^i)^\top\, (S_k^i)^{-1}.
+$$
+
+The mean and covariance are then updated as
 
 $$
 \boldsymbol{\mu}_k = \overline{\boldsymbol{\mu}}_k + K_k^i\, y_k^i
 $$
 
+and
+
 $$
-\boldsymbol{\Sigma}_k = (I - K_k^i\, H_k^i)\, \overline{\boldsymbol{\Sigma}}_k
+\boldsymbol{\Sigma}_k = (I - K_k^i\, H_k^i)\, \overline{\boldsymbol{\Sigma}}_k.
 $$
 
-Because the gain $K_k^i$ has non-zero entries for all landmarks (through the off-diagonal covariance blocks), **observing one landmark updates the estimated positions of all other landmarks** — this is the loop-closure effect.
-
----
+Although the observation is of only one landmark, the gain $K_k^i$ can have non-zero entries for all landmarks because of the off-diagonal covariance blocks. This means that **observing one landmark can update the estimated positions of other landmarks**.
 
 ### Initialising new landmarks
 
 When a new landmark $j$ is seen for the first time, we initialise its position by inverting the observation model:
 
 $$
-\mu_{m_j} = \begin{pmatrix} \bar{\mu}_x + r\cos(\phi + \bar{\mu}_\theta) \\ \bar{\mu}_y + r\sin(\phi + \bar{\mu}_\theta) \end{pmatrix}
+\mu_{m_j} = \begin{pmatrix} \bar{\mu}_x + r\cos(\phi + \bar{\mu}_\theta) \\ \bar{\mu}_y + r\sin(\phi + \bar{\mu}_\theta) \end{pmatrix},
 $$
 
-where $(r, \phi)$ is the observed range and bearing. The landmark's initial uncertainty is computed via the Jacobian of this inverse model, propagating both sensor noise and the current robot pose uncertainty.
-
----
+where $(r, \phi)$ is the observed range and bearing. The landmark’s initial uncertainty is computed using the Jacobian of this inverse model, propagating both the sensor noise and the current robot pose uncertainty.
 
 ### Data association
 
-Before updating, we must decide **which observed feature corresponds to which landmark** in the map. This is the *data association* problem. A common approach is nearest-neighbour matching using the Mahalanobis distance:
+Before applying a measurement update, the robot must decide **which observed feature corresponds to which landmark** in the map. This is the *data association* problem.
+
+A common approach is nearest-neighbour matching using the Mahalanobis distance:
 
 $$
-d_M^2 = (z - \hat{z})^\top S^{-1} (z - \hat{z})
+d_M^2 = (z - \hat{z})^\top S^{-1} (z - \hat{z}).
 $$
 
-A new landmark is initialised only when no existing landmark is within a threshold. Incorrect associations can corrupt the map, making data association one of the most challenging aspects of SLAM in practice.
-
----
+A new landmark is initialised only when no existing landmark lies within a chosen threshold. Incorrect associations can corrupt the map, which makes data association one of the most challenging parts of practical SLAM.
 
 ### Key intuition
 
-> uncertainty is shared between robot and map
-
-When the robot re-observes a known landmark, the error in that observation feeds back through the correlated covariance to reduce uncertainty everywhere. This is **loop closure**: returning to a previously visited place dramatically improves the map.
+The key intuition is that uncertainty is shared between the robot and the map. When the robot re-observes a known landmark, the error in that observation flows back through the correlated covariance structure and can reduce uncertainty throughout the map. This is **loop closure**: returning to a previously visited place can dramatically improve the map.
 
 > Smith, R., Self, M., and Cheeseman, P. (1986). "On the representation and estimation of spatial uncertainty." *International Journal of Robotics Research*, 5(4), 56–68.
 
@@ -212,106 +170,73 @@ When the robot re-observes a known landmark, the error in that observation feeds
 
 ## Occupancy grid SLAM
 
-Landmarks are nice.
+Landmarks are useful when the world contains nice discrete features. But many environments do not naturally break into clean landmark observations. In those cases, we often use an occupancy grid.
 
-But what if the world does not have nice discrete features?
-
----
-
-### Alternative representation
-
-We represent the world as a regular grid of cells. Each cell $c$ stores the **log-odds** of occupancy:
+An occupancy grid represents the world as a regular grid of cells. Each cell $c$ stores the **log-odds** of occupancy:
 
 $$
-l_c = \log \frac{p(c = \text{occ})}{1 - p(c = \text{occ})}
+l_c = \log \frac{p(c = \text{occ})}{1 - p(c = \text{occ})}.
 $$
 
-Starting from a prior $l_0 = 0$ (i.e. $p = 0.5$), we update each cell that a sensor ray passes through or terminates at:
+We usually start from a prior $l_0 = 0$, which corresponds to $p = 0.5$. Each time a sensor ray passes through or terminates at a cell, we update that cell:
 
 $$
-l_c \leftarrow l_c + \log \frac{p(c = \text{occ} \mid z)}{1 - p(c = \text{occ} \mid z)} - l_0
+l_c \leftarrow l_c + \log \frac{p(c = \text{occ} \mid z)}{1 - p(c = \text{occ} \mid z)} - l_0.
 $$
 
-In practice this means:
+In practice, cells at the end of a sensor ray receive a positive occupancy increment $l_\text{occ}$, while cells along the free part of the ray receive a negative free-space decrement $l_\text{free}$.
 
-- cells at the end of a ray (sensor hit) get a positive increment $l_\text{occ}$
-- cells along the free part of a ray get a negative decrement $l_\text{free}$
-
-Recovering the probability is always possible:
+We can always convert the log-odds value back into a probability:
 
 $$
-p(c = \text{occ}) = 1 - \frac{1}{1 + e^{l_c}}
+p(c = \text{occ}) = 1 - \frac{1}{1 + e^{l_c}}.
 $$
 
-The log-odds representation is numerically convenient: sequential updates are additions, and the values are symmetric around zero.
+The log-odds representation is convenient because sequential updates become additions, and the values are symmetric around zero.
 
----
+The main change from landmark SLAM is the size of the map. Instead of a small set of landmark positions, the map may contain $W \times H$ cells, each updated independently. We still need a robot pose estimate to know which cells each ray passes through, often using ray-casting methods such as Bresenham’s line algorithm. However, because the map is so large, joint EKF-style estimation quickly becomes infeasible.
 
-### What changes?
-
-- the map has $W \times H$ cells, each updated independently
-- we still need a robot pose estimate to know which cells each ray hits (ray-casting via Bresenham's line algorithm)
-- because the map is so large, joint EKF-style estimation is infeasible
-
----
-
-### Tradeoff
-
-- flexible representation, works directly with lidar or depth cameras
-- no need to extract discrete landmarks
-
-but:
-
-- computationally expensive for large environments
-- requires accurate localisation to avoid blurry maps
+Occupancy grids are flexible and work directly with lidar or depth cameras without requiring discrete landmark extraction. The tradeoff is that they can be computationally expensive in large environments and they require accurate localisation; otherwise, the resulting map becomes blurry or inconsistent.
 
 ---
 
 ## Rao-Blackwellisation and FastSLAM
 
-At this point the joint state becomes enormous, especially with occupancy grids.
+As the joint state grows, especially with occupancy grids, estimating everything together becomes expensive. FastSLAM addresses this by exploiting the **conditional independence** structure of the SLAM problem.
 
----
-
-### The idea
-
-We exploit the **conditional independence** structure of the SLAM problem. Given a full robot trajectory $x_{0:k}$, the map cells (or landmarks) become conditionally independent of each other:
+Given a full robot trajectory $x_{0:k}$, the map cells or landmarks become conditionally independent of each other:
 
 $$
-p(\mathbf{x}_{0:k}, m \mid z_{1:k}, u_{1:k}) = p(m \mid \mathbf{x}_{0:k}, z_{1:k})\; p(\mathbf{x}_{0:k} \mid z_{1:k}, u_{1:k})
+p(\mathbf{x}_{0:k}, m \mid z_{1:k}, u_{1:k}) = p(m \mid \mathbf{x}_{0:k}, z_{1:k})\; p(\mathbf{x}_{0:k} \mid z_{1:k}, u_{1:k}).
 $$
 
-This factorisation is called **Rao-Blackwellisation**. Instead of estimating everything jointly, we:
-
-1. **sample** robot trajectories with a particle filter
-2. **maintain a separate map** for each particle, conditioned on its trajectory
-
----
+This factorisation is called **Rao-Blackwellisation**. Instead of estimating everything jointly, we sample possible robot trajectories with a particle filter, and for each particle we maintain a separate map conditioned on that trajectory.
 
 ### FastSLAM algorithm
 
-Each particle $i$ stores:
-
-- a robot trajectory hypothesis $x_{0:k}^{(i)}$
-- a set of $N$ landmark EKFs $\{\mu_{m_j}^{(i)}, \Sigma_{m_j}^{(i)}\}_{j=1}^N$ (one per landmark, per particle)
-
-**Predict:** sample a new pose from the motion model:
+Each particle $i$ stores a robot trajectory hypothesis $x_{0:k}^{(i)}$ and a set of landmark EKFs,
 
 $$
-x_k^{(i)} \sim p(x_k \mid x_{k-1}^{(i)}, u_k)
+\{\mu_{m_j}^{(i)}, \Sigma_{m_j}^{(i)}\}_{j=1}^N,
 $$
 
-**Update:** for each observed landmark $j$, compute the particle weight using the likelihood under that particle's landmark EKF:
+with one small EKF per landmark, per particle.
+
+During prediction, a new pose is sampled from the motion model:
 
 $$
-w_k^{(i)} \propto \mathcal{N}\!\left(z_k^j;\; h(x_k^{(i)}, \mu_{m_j}^{(i)}),\; H_k^{(i)}\Sigma_{m_j}^{(i)}(H_k^{(i)})^\top + R\right)
+x_k^{(i)} \sim p(x_k \mid x_{k-1}^{(i)}, u_k).
 $$
 
-Then update the relevant EKF for landmark $j$ in particle $i$.
+During the update step, each observed landmark $j$ is used to compute the particle weight under that particle’s landmark estimate:
 
-**Resample** particles by weight.
+$$
+w_k^{(i)} \propto \mathcal{N}\!\left(z_k^j;\; h(x_k^{(i)}, \mu_{m_j}^{(i)}),\; H_k^{(i)}\Sigma_{m_j}^{(i)}(H_k^{(i)})^\top + R\right).
+$$
 
-FastSLAM scales as $O(M \log N)$ in the number of particles $M$ and landmarks $N$, compared to $O(N^2)$ for EKF SLAM — a significant practical improvement.
+The relevant EKF for landmark $j$ is then updated inside particle $i$, and particles are resampled according to their weights.
+
+FastSLAM scales as $O(M \log N)$ in the number of particles $M$ and landmarks $N$, compared with $O(N^2)$ for EKF SLAM. This is a significant practical improvement.
 
 > Montemerlo, M., Thrun, S., Koller, D., and Wegbreit, B. (2002). "FastSLAM: A Factored Solution to the Simultaneous Localization and Mapping Problem." In *Proceedings of the AAAI National Conference on Artificial Intelligence*, pp. 593–598.
 
@@ -319,63 +244,29 @@ FastSLAM scales as $O(M \log N)$ in the number of particles $M$ and landmarks $N
 
 ## Global vs Local Planning
 
-Now suppose we have a map. We can ask:
+Once we have a map, we can ask a new question:
 
 > how do we get from A to B?
 
-Before we look at specific algorithms it is important to distinguish two levels of planning that operate simultaneously in most autonomous robots.
+Before looking at specific algorithms, it is useful to distinguish two levels of planning that operate together in most autonomous robots.
 
----
+A **global planner** computes a path from the robot’s current pose to a distant goal using a complete, or nearly complete, map of the environment. It operates over the full map and usually runs relatively infrequently, such as once per goal or when the map changes significantly. Its output is normally a reference path or waypoint sequence. Global planners include methods such as A*, D*, RRT and PRM.
 
-### Global planning
+A **local planner**, in contrast, is responsible for short-term motion around the robot’s immediate surroundings. It operates over a small local window, often only a few metres around the robot, and runs at high frequency. It must react to dynamic obstacles such as people, other vehicles, or objects that were not in the global map. Local planners include the Dynamic Window Approach, tentacle-based navigation and trajectory rollout.
 
-A **global planner** computes a path from the robot's current pose to a distant goal, using a complete (or nearly complete) map of the environment:
-
-- operates over the full map
-- runs relatively infrequently (once per goal, or when the map changes significantly)
-- produces a **reference path** or **waypoint sequence**
-- does not need to react to transient obstacles not in the map
-- examples: A*, D*, RRT, PRM
-
----
-
-### Local planning
-
-A **local planner** is responsible for executing motion in the short term, around the robot's immediate vicinity:
-
-- operates over a small local window (e.g. a 5 m radius around the robot)
-- runs at high frequency (10–50 Hz)
-- must react to **dynamic obstacles** not in the global map (people, other vehicles)
-- tries to follow the global plan while avoiding immediate hazards
-- examples: Dynamic Window Approach, tentacle-based navigation, trajectory rollout
-
----
-
-### How they interact
-
-The global planner provides a **desired heading or waypoint**, and the local planner finds a feasible motion toward that waypoint within the robot's kinematic constraints and the current local sensor field. If the local planner cannot make progress (e.g. a deadlock), the global planner must re-plan.
+In practice, these two planners interact continuously. The global planner provides a desired heading, path or waypoint, while the local planner chooses a feasible motion toward that reference under the robot’s kinematic constraints and current sensor observations. If the local planner cannot make progress, for example because of a deadlock or newly discovered obstacle, the global planner must re-plan.
 
 ---
 
 ## Bug algorithms
 
-Let's start with the simplest local reactive strategy.
-
-Assume:
-
-- we know where the goal is
-- we can sense obstacles locally
-- we do not have a map
-
----
+Bug algorithms are among the simplest local reactive strategies. They assume that the robot knows where the goal is, can sense obstacles locally and does not have a map.
 
 ### Bug 0
 
-Move toward the goal. When a boundary is hit, follow it (e.g. always keep the obstacle on the left) until the direction to the goal is clear again, then resume heading for the goal.
+Bug 0 moves directly toward the goal whenever possible. When the robot hits an obstacle boundary, it follows that boundary, for example by always keeping the obstacle on its left, until the direction to the goal is clear again. It then leaves the boundary and resumes heading for the goal.
 
-**Algorithm:**
-
-```
+```text
 while not at goal:
     if path to goal is clear:
         move toward goal
@@ -385,17 +276,13 @@ while not at goal:
             leave boundary and move toward goal
 ```
 
-Bug 0 is not guaranteed to terminate in all environments — it can loop.
-
----
+Bug 0 is simple, but it is not guaranteed to terminate in all environments. It can get trapped in loops.
 
 ### Bug 1
 
-Fully circumnavigate each obstacle encountered. Record the point on the boundary that is closest to the goal, and exit there.
+Bug 1 is more cautious. When it encounters an obstacle, it fully circumnavigates the obstacle boundary, records the boundary point closest to the goal and then leaves the obstacle from that point.
 
-**Algorithm:**
-
-```
+```text
 while not at goal:
     move toward goal
     if obstacle hit at hit point H:
@@ -405,23 +292,19 @@ while not at goal:
         leave toward goal
 ```
 
-**Guarantee:** Bug 1 terminates if a path exists. The path length is at most:
+Bug 1 is guaranteed to terminate if a path exists. Its path length is at most
 
 $$
-d(q_{\text{start}}, q_{\text{goal}}) + \frac{1}{2}\sum_{i} P_i
+d(q_{\text{start}}, q_{\text{goal}}) + \frac{1}{2}\sum_{i} P_i,
 $$
 
 where $P_i$ is the perimeter of obstacle $i$.
 
----
-
 ### Bug 2
 
-Instead of circumnavigating the full boundary, follow it only until the **goal line** (the straight line from start to goal) is re-crossed at a point closer to the goal than the hit point.
+Bug 2 avoids full circumnavigation when possible. It uses the **M-line**, the straight line from start to goal. When the robot hits an obstacle, it follows the obstacle boundary only until the M-line is crossed again at a point closer to the goal than the original hit point.
 
-**Algorithm:**
-
-```
+```text
 Compute the M-line: the straight line from start to goal
 while not at goal:
     move along M-line toward goal
@@ -431,66 +314,41 @@ while not at goal:
             leave boundary, resume along M-line
 ```
 
-**Guarantee:** terminates with path length bounded by:
+Bug 2 is also guaranteed to terminate if a path exists. Its path length is bounded by
 
 $$
-d(q_{\text{start}}, q_{\text{goal}}) + \frac{1}{2}\sum_{i} n_i P_i
+d(q_{\text{start}}, q_{\text{goal}}) + \frac{1}{2}\sum_{i} n_i P_i,
 $$
 
-where $n_i$ is the number of times the M-line intersects obstacle $i$. Bug 2 is generally shorter than Bug 1 in practice.
+where $n_i$ is the number of times the M-line intersects obstacle $i$. In practice, Bug 2 is generally shorter than Bug 1.
 
-These are simple and surprisingly effective in the right conditions.
+These algorithms are simple and surprisingly effective in the right conditions.
 
 > Lumelsky, V. J. and Stepanov, A. A. (1987). "Path-planning strategies for a point mobile automaton moving amidst unknown obstacles of arbitrary shape." *Algorithmica*, 2(1–4), 403–430.
 
----
-
-### Limitations
-
-- inefficient and path length can grow with obstacle perimeter
-- no global optimality guarantee
-- does not handle non-simply-connected environments well
-- purely reactive: no benefit from accumulated map knowledge
+Their limitations are also important. They can be inefficient, their path length can grow with obstacle perimeter, they provide no global optimality guarantee and they do not benefit from accumulated map knowledge. They are purely reactive methods.
 
 ---
 
 ## A* and D*
 
-Now assume we **do have a map**.
+Now suppose we **do have a map**. Planning can then be formulated as a graph search problem.
 
-We can turn planning into a graph search problem.
-
----
-
-### Graph construction
-
-We discretise the environment into a grid or a graph $G = (V, E)$:
-
-- each node $n \in V$ represents a configuration (e.g. a grid cell)
-- each edge $(n, n') \in E$ has a cost $c(n, n')$ (e.g. Euclidean distance between cell centres)
-
-We seek a minimum-cost path from start $s$ to goal $g$.
-
----
+We discretise the environment into a grid or graph $G = (V, E)$. Each node $n \in V$ represents a configuration, such as a grid cell, and each edge $(n, n') \in E$ has a cost $c(n, n')$, such as the Euclidean distance between cell centres. The goal is to find a minimum-cost path from a start node $s$ to a goal node $g$.
 
 ### A* algorithm
 
-A* maintains two quantities for each node $n$:
+A* maintains two quantities for each node $n$. The first is $g(n)$, the cost of the cheapest path found so far from the start to $n$. The second is $h(n)$, a heuristic estimate of the remaining cost from $n$ to the goal.
 
-- $g(n)$: the **cost** of the cheapest path found so far from start to $n$
-- $h(n)$: a **heuristic** estimate of the cost from $n$ to the goal
-
-The priority function is:
+The priority function is
 
 $$
-f(n) = g(n) + h(n)
+f(n) = g(n) + h(n).
 $$
 
 Nodes are expanded in order of increasing $f(n)$.
 
-**Algorithm:**
-
-```
+```text
 open_set = {start}
 g(start) = 0
 f(start) = h(start)
@@ -509,39 +367,31 @@ while open_set is not empty:
             add n' to open_set if not already there
 ```
 
----
-
-### Admissibility and optimality
-
 A heuristic $h(n)$ is **admissible** if it never overestimates the true cost to the goal:
 
 $$
-h(n) \leq h^*(n) \qquad \forall n
+h(n) \leq h^*(n) \qquad \forall n,
 $$
 
-where $h^*(n)$ is the true cheapest cost from $n$ to the goal. A common choice for grid-based planning is the Euclidean distance:
+where $h^*(n)$ is the true cheapest cost from $n$ to the goal. For grid-based planning, a common choice is Euclidean distance,
 
 $$
-h(n) = \|n - g\|_2
+h(n) = \|n - g\|_2,
 $$
 
-or, when only 4-connected moves are allowed, the Manhattan distance:
+or Manhattan distance when only 4-connected moves are allowed:
 
 $$
-h(n) = |n_x - g_x| + |n_y - g_y|
+h(n) = |n_x - g_x| + |n_y - g_y|.
 $$
 
-**Theorem (Hart et al., 1968):** if $h$ is admissible, A* returns an optimal path.
-
-A* is also **complete**: if a path exists, it will be found.
+**Theorem (Hart et al., 1968):** if $h$ is admissible, A* returns an optimal path. A* is also complete, meaning that if a path exists, it will be found.
 
 > Hart, P. E., Nilsson, N. J., and Raphael, B. (1968). "A Formal Basis for the Heuristic Determination of Minimum Cost Paths." *IEEE Transactions on Systems Science and Cybernetics*, 4(2), 100–107.
 
----
-
 ### D*
 
-D* (Dynamic A*) extends A* to handle **changing maps**. Instead of searching from start to goal, it searches from goal to start, maintaining back-pointers. When an edge cost changes (e.g. a new obstacle is detected), only the affected portion of the plan is repaired rather than replanning from scratch.
+D*, or Dynamic A*, extends A* to handle **changing maps**. Instead of repeatedly replanning from scratch whenever the map changes, D* repairs only the affected portion of the plan. It searches from the goal back toward the start while maintaining back-pointers. When an edge cost changes, such as when a new obstacle is detected, only the relevant parts of the search tree need to be updated.
 
 > Stentz, A. (1994). "Optimal and Efficient Path Planning for Partially-Known Environments." In *Proceedings of the IEEE International Conference on Robotics and Automation (ICRA)*, pp. 3310–3317.
 
@@ -549,58 +399,38 @@ D* (Dynamic A*) extends A* to handle **changing maps**. Instead of searching fro
 
 ## Probabilistic Roadmaps (PRM)
 
-Instead of a grid, we can represent free space as a sparse graph by random sampling.
+Instead of planning on a dense grid, a Probabilistic Roadmap represents free space as a sparse graph built by random sampling.
 
----
+During the build phase, random configurations are sampled. Collision-free configurations are added as graph nodes, and nearby nodes are connected if the path between them is also collision-free.
 
-### Algorithm
-
-**Build phase:**
-
-```
+```text
 while roadmap is not dense enough:
     q = sample random configuration
     if q is collision-free:
         add q to V
         for each q' in V near q:
-            if path q→q' is collision-free:
+            if path q -> q' is collision-free:
                 add edge (q, q') to E
 ```
 
-**Query phase:**
+During the query phase, the start and goal configurations are connected to the roadmap, and a graph search method such as A* or Dijkstra’s algorithm is used to find a path.
 
-```
+```text
 connect q_start and q_goal to the roadmap
 find shortest path using A* or Dijkstra
 ```
 
 > Kavraki, L. E., Švestka, P., Latombe, J. C., and Overmars, M. H. (1996). "Probabilistic roadmaps for path planning in high-dimensional configuration spaces." *IEEE Transactions on Robotics and Automation*, 12(4), 566–580.
 
----
-
-### Strengths
-
-- effective for high-dimensional configuration spaces (e.g. robot arms)
-- roadmap can be reused for multiple queries in the same environment
-
----
-
-### Weaknesses
-
-- struggles with narrow passages (low probability of sampling a valid connection)
-- assumes a static environment (no online re-planning)
+PRMs are effective for high-dimensional configuration spaces, such as robot arms, and the roadmap can be reused for multiple queries in the same environment. Their main weakness is that they struggle with narrow passages, because the probability of sampling useful connections in a narrow region can be low. They also assume a mostly static environment and are not naturally suited to online replanning.
 
 ---
 
 ## RRT
 
-Instead of building a full roadmap, we grow a **single tree** from the start state toward the goal.
+Rapidly-exploring Random Trees, or RRTs, take a different approach. Instead of building a full roadmap, an RRT grows a **single tree** from the start state toward unexplored regions of the space and, eventually, toward the goal.
 
----
-
-### Algorithm
-
-```
+```text
 T = {x_start}
 
 for i = 1 to N:
@@ -617,151 +447,124 @@ for i = 1 to N:
 The **Steer** function moves from $x_\text{near}$ toward $x_\text{rand}$ by at most `step_size`:
 
 $$
-x_\text{new} = x_\text{near} + \Delta \cdot \frac{x_\text{rand} - x_\text{near}}{\|x_\text{rand} - x_\text{near}\|}
+x_\text{new} = x_\text{near} + \Delta \cdot \frac{x_\text{rand} - x_\text{near}}{\|x_\text{rand} - x_\text{near}\|}.
 $$
 
 > LaValle, S. M. (1998). "Rapidly-Exploring Random Trees: A New Tool for Path Planning." Technical Report TR 98-11, Iowa State University.
 
----
-
-### Key property
-
-The probability of sampling in any region of the configuration space is proportional to its volume (Voronoi bias), so the tree automatically expands toward unexplored space:
+The key property of RRT is its Voronoi bias. The probability of extending a node is proportional to the volume of its Voronoi region:
 
 $$
-P(\text{node } n \text{ extended}) \propto \text{Vol}(\text{Voronoi region of } n)
+P(\text{node } n \text{ extended}) \propto \text{Vol}(\text{Voronoi region of } n).
 $$
 
----
+This means the tree naturally expands toward unexplored regions.
 
 ### RRT*
 
-The original RRT is not asymptotically optimal — the first solution found may be suboptimal and does not improve. **RRT*** adds two modifications:
+The original RRT is not asymptotically optimal. The first solution found may be poor, and continuing to sample does not necessarily improve it. **RRT*** adds two ideas: near-set rewiring and tree rewiring.
 
-1. **Near-set rewiring:** when adding $x_\text{new}$, check all nearby nodes to find the cheapest path to $x_\text{new}$:
-
-$$
-x_\text{parent} = \arg\min_{x' \in \text{Near}(x_\text{new})} \left[c(x_\text{start} \to x') + c(x' \to x_\text{new})\right]
-$$
-
-2. **Rewire the tree:** for each node $x'$ near $x_\text{new}$, check whether routing through $x_\text{new}$ is cheaper:
+When adding $x_\text{new}$, RRT* checks nearby nodes and chooses the parent that gives the cheapest path to $x_\text{new}$:
 
 $$
-\text{if } c(x_\text{start} \to x_\text{new}) + c(x_\text{new} \to x') < c(x_\text{start} \to x'):\quad \text{reparent } x' \text{ to } x_\text{new}
+x_\text{parent} = \arg\min_{x' \in \text{Near}(x_\text{new})} \left[c(x_\text{start} \to x') + c(x' \to x_\text{new})\right].
 $$
 
-RRT* is **asymptotically optimal**: as the number of samples $N \to \infty$, the path cost converges to the optimal.
+Then, for each nearby node $x'$, it checks whether routing through $x_\text{new}$ would be cheaper:
+
+$$
+\text{if } c(x_\text{start} \to x_\text{new}) + c(x_\text{new} \to x') < c(x_\text{start} \to x'):\quad \text{reparent } x' \text{ to } x_\text{new}.
+$$
+
+RRT* is **asymptotically optimal**: as the number of samples $N \to \infty$, the path cost converges to the optimal cost.
 
 > Karaman, S. and Frazzoli, E. (2011). "Sampling-based algorithms for optimal motion planning." *International Journal of Robotics Research*, 30(7), 846–894.
 
----
-
-### When to use RRT
-
-- systems with complex kinematics or dynamics
-- continuous, high-dimensional configuration spaces
-- single-query planning (one start, one goal)
+RRT is especially useful for systems with complex kinematics or dynamics, continuous high-dimensional configuration spaces and single-query planning problems where there is one start and one goal.
 
 ---
 
 ## Local planning methods
 
-Global planners produce a reference path, but they cannot react quickly to dynamic obstacles or deal with the robot's kinematic constraints at low level. We need a **local planner**.
-
----
+Global planners produce a reference path, but they cannot react quickly to dynamic obstacles or directly handle low-level kinematic constraints. For that we need a **local planner**.
 
 ### Dynamic Window Approach (DWA)
 
-The DWA searches directly in **velocity space** $(v, \omega)$ for a safe, goal-directed motion command.
+The Dynamic Window Approach searches directly in **velocity space**, using candidate commands $(v, \omega)$, to find a safe and goal-directed motion.
 
-**Step 1 — Dynamic window.** Given the current velocity $(v_c, \omega_c)$ and the robot's acceleration limits $(\dot{v}_\text{max}, \dot{\omega}_\text{max})$, the reachable velocities within one time step $\tau$ form a window:
-
-$$
-V_d = \{(v,\omega) \mid v \in [v_c - \dot{v}_\text{max}\tau,\; v_c + \dot{v}_\text{max}\tau],\quad \omega \in [\omega_c - \dot{\omega}_\text{max}\tau,\; \omega_c + \dot{\omega}_\text{max}\tau]\}
-$$
-
-We intersect this with the **admissible velocities** $V_a$ — those that allow the robot to stop before hitting an obstacle:
+The first step is to compute the dynamic window. Given the current velocity $(v_c, \omega_c)$ and the robot’s acceleration limits $(\dot{v}_\text{max}, \dot{\omega}_\text{max})$, the velocities reachable within one time step $\tau$ are
 
 $$
-V_a = \{(v,\omega) \mid v \leq \sqrt{2\, d(v,\omega)\, \dot{v}_\text{max}}\}
+V_d = \{(v,\omega) \mid v \in [v_c - \dot{v}_\text{max}\tau,\; v_c + \dot{v}_\text{max}\tau],\quad \omega \in [\omega_c - \dot{\omega}_\text{max}\tau,\; \omega_c + \dot{\omega}_\text{max}\tau]\}.
 $$
 
-where $d(v, \omega)$ is the distance to the nearest obstacle along the circular arc $(v, \omega)$ would trace.
-
-**Step 2 — Score candidate velocities.** For each $(v, \omega)$ in $V_d \cap V_a$, simulate the arc for a short horizon and compute:
+This set is intersected with the **admissible velocities** $V_a$, which are the velocities that allow the robot to stop before hitting an obstacle:
 
 $$
-G(v, \omega) = \sigma\!\left[\alpha \cdot \text{heading}(v,\omega) + \beta \cdot \text{clearance}(v,\omega) + \gamma \cdot v\right]
+V_a = \{(v,\omega) \mid v \leq \sqrt{2\, d(v,\omega)\, \dot{v}_\text{max}}\}.
 $$
 
-where:
+Here, $d(v, \omega)$ is the distance to the nearest obstacle along the circular arc traced by the command $(v, \omega)$.
 
-- $\text{heading}(v,\omega)$ measures alignment with the goal direction after the arc
-- $\text{clearance}(v,\omega)$ is the distance to the nearest obstacle on the arc
-- $v$ rewards higher speed
-- $\alpha, \beta, \gamma$ are tunable weights
-- $\sigma(\cdot)$ is a smoothing normalisation
-
-**Step 3 — Select and execute:**
+The second step is to score each candidate velocity in $V_d \cap V_a$. Each candidate arc is simulated over a short horizon and evaluated using
 
 $$
-(v^*, \omega^*) = \arg\max_{(v,\omega) \in V_d \cap V_a} G(v, \omega)
+G(v, \omega) = \sigma\!\left[\alpha \cdot \text{heading}(v,\omega) + \beta \cdot \text{clearance}(v,\omega) + \gamma \cdot v\right].
 $$
 
-DWA runs at sensor rate (typically 20–50 Hz) and produces smooth, kinematically feasible commands directly.
+The heading term measures alignment with the goal direction after the arc, the clearance term measures the distance to the nearest obstacle along the arc and the speed term rewards faster motion. The weights $\alpha$, $\beta$ and $\gamma$ tune the relative importance of these objectives, while $\sigma(\cdot)$ is a smoothing normalisation.
+
+The final command is the highest-scoring admissible velocity:
+
+$$
+(v^*, \omega^*) = \arg\max_{(v,\omega) \in V_d \cap V_a} G(v, \omega).
+$$
+
+DWA runs at sensor rate, typically around 20–50 Hz, and directly produces smooth, kinematically feasible commands.
 
 > Fox, D., Burgard, W., and Thrun, S. (1997). "The Dynamic Window Approach to Collision Avoidance." *IEEE Robotics and Automation Magazine*, 4(1), 23–33.
 
----
-
 ### Trajectory rollout
 
-A close relative of DWA is **trajectory rollout**, which simulates each candidate velocity $(v, \omega)$ not just for one arc, but for a longer trajectory of $T$ steps:
+Trajectory rollout is closely related to DWA. Instead of scoring only a short arc, it simulates each candidate velocity $(v, \omega)$ over a longer trajectory of $T$ steps:
 
 $$
-\mathbf{x}_{t+1}^{(v,\omega)} = f(\mathbf{x}_t^{(v,\omega)},\, v,\, \omega)
+\mathbf{x}_{t+1}^{(v,\omega)} = f(\mathbf{x}_t^{(v,\omega)},\, v,\, \omega).
 $$
 
-and scores the full rollout:
+The full rollout is scored using a cost function such as
 
 $$
-J(v,\omega) = \sum_{t=0}^{T} c(\mathbf{x}_t^{(v,\omega)})
+J(v,\omega) = \sum_{t=0}^{T} c(\mathbf{x}_t^{(v,\omega)}),
 $$
 
-where $c(\cdot)$ can encode clearance, deviation from the reference path, and speed. This is an early form of **model predictive control** applied to local navigation.
-
----
+where $c(\cdot)$ can encode clearance, deviation from the reference path and speed. This can be viewed as an early form of **model predictive control** applied to local navigation.
 
 ### Driving with tentacles
 
-An alternative to velocity-space search is **tentacle-based navigation**, in which a fixed set of candidate arcs (tentacles) is pre-computed offline.
-
-Each tentacle $k$ is defined by a constant curvature $\kappa_k$:
+Tentacle-based navigation uses a fixed set of candidate arcs, or tentacles, that are precomputed offline. Each tentacle $k$ is defined by a constant curvature
 
 $$
-\kappa_k = \frac{\omega_k}{v}, \qquad k = 1, \dots, K
+\kappa_k = \frac{\omega_k}{v}, \qquad k = 1, \dots, K.
 $$
 
-giving $K$ pre-computed arc paths that fan out in front of the robot (typically $K = 7$–$15$, symmetric about the forward direction).
+This gives $K$ precomputed arc paths that fan out in front of the robot, often with $K = 7$–$15$ and symmetry about the forward direction.
 
-**At runtime:**
-
-1. **Cast** each tentacle against the local occupancy grid. A tentacle is **blocked** if any cell it passes through is occupied.
-2. **Score** each free tentacle:
+At runtime, each tentacle is checked against the local occupancy grid. A tentacle is blocked if any cell along it is occupied. The free tentacles are then scored using
 
 $$
-s_k = w_g \cdot \text{goal\_alignment}(\kappa_k) + w_c \cdot \text{clearance}(\kappa_k) + w_v \cdot v_k
+s_k = w_g \cdot \text{goal\_alignment}(\kappa_k) + w_c \cdot \text{clearance}(\kappa_k) + w_v \cdot v_k.
 $$
 
-3. **Select** the highest-scoring free tentacle and apply the corresponding $(v, \omega)$ command.
+The robot selects the highest-scoring free tentacle and applies the corresponding $(v, \omega)$ command.
 
-Tentacle methods are extremely fast at runtime because the geometry is precomputed — only occupancy lookups and a linear scoring pass are needed. They are widely used in high-speed autonomous driving where compute is limited and reaction must be near-instantaneous.
+Tentacle methods are extremely fast at runtime because the geometry is precomputed. The online computation is mostly occupancy lookup and a linear scoring pass. This makes them useful in high-speed autonomous driving, where compute can be limited and reaction time must be very short.
 
 > Urmson, C. et al. (2008). "Autonomous driving in urban environments: Boss and the Urban Challenge." *Journal of Field Robotics*, 25(8), 425–466.
 
----
+### Comparing local planning methods
 
-### Comparison: local planning methods
+Bug algorithms are simple and reactive, but they do not operate in velocity space and do not explicitly handle robot kinematics. DWA searches continuous velocity space, handles kinematics and reacts quickly. Trajectory rollout also handles kinematics but simulates longer candidate trajectories, making it somewhat more computationally expensive. Tentacle methods use precomputed arcs, which makes them extremely fast, but less flexible than continuous optimisation over velocity space.
 
 | Method | Velocity space | Pre-computed | Handles kinematics | Reactive speed |
 |---|---|---|---|---|
@@ -774,18 +577,11 @@ Tentacle methods are extremely fast at runtime because the geometry is precomput
 
 ## Big picture
 
-Let's zoom out.
+This week connects the major components of robot navigation. Modelling tells us how the robot moves. Estimation tells us where the robot is. Mapping tells us what the world looks like. Planning tells us what the robot should do, both globally and locally.
 
-This week connects everything:
+The full navigation stack can be viewed as
 
-- modelling → how the robot moves
-- estimation → where the robot is
-- mapping → what the world looks like
-- planning → what the robot should do (globally and locally)
-
-The full navigation stack looks like:
-
-```
+```text
 Sensor data
     ↓
 SLAM (localise + build map)
@@ -803,19 +599,8 @@ Each layer operates at a different timescale and level of abstraction.
 
 ## Final thought
 
-Robotics is not just:
+Robotics is not just choosing actions. It is choosing actions **under uncertainty, in a world we do not fully know, that changes while we act**. That is what makes it hard, and also what makes it interesting.
 
-> choosing actions
-
-It is:
-
-> choosing actions **under uncertainty, in a world we do not fully know, that changes while we act**
-
-That is what makes it hard.
-
-And also what makes it interesting.
-
----
 
 ## Key Papers
 
@@ -843,12 +628,6 @@ And also what makes it interesting.
 
 # Coming up next
 
-We now have:
-
-- models
-- estimators
-- planners (global and local)
-
-Next, we look at perception and learning — how robots can sense and interpret the world around them.
+We now have models, estimators and planners, both global and local. Next, we look at perception and learning: how robots sense and interpret the world around them.
 
 → [Week 6: Perception and Learning](../week-08-perception-and-learning/)
