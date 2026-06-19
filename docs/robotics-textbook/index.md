@@ -1,6 +1,6 @@
 # Preface
 
-Welcome to intelligent robotics. I am going to attempt to cram everything I know into 10 chapters.
+Welcome to Physical AI: Robotics, Learning, and Control in the Real World. I am going to attempt to cram everything I know into 10 chapters.
 
 But first some acknowledgements. These notes were informed by teaching materials and discussions developed over many years by colleagues and students including Dana Kulić, Juxi Leitner, Pamela Carreno-Medrano, Tan Chee Pin, Subramanian Ramamoorthy, Todor Davchev, Miguel Jaques, Daniel Angelov, Yordan Hristov, Artūras Straižys, Juyan Zhang, Haoyang Jiang, Boxuan Zhang, Bryce Ferenczi and many others. Any errors, omissions or questionable editorial decisions are more own. Figures are AI generated placeholders.
 

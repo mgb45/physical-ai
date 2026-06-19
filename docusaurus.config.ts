@@ -18,9 +18,9 @@ const config: Config = {
 
   // --- CHANGED FOR GITHUB PAGES DEPLOYMENT ---
   url: 'https://michaelburke.co.za',
-  baseUrl: '/intelligent-robots/',
+  baseUrl: '/physical-ai/',
   organizationName: 'mgb45', 
-  projectName: 'intelligent-robots', 
+  projectName: 'Physical AI: Robotics, Learning, and Control in the Real World', 
   trailingSlash: false, 
   // --------------------------------------------
 
@@ -72,9 +72,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Intelligent Robotics',
+      title: 'Physical AI: Robotics, Learning, and Control in the Real World',
       logo: {
-        alt: 'Robotics =Logo',
+        alt: 'Physical AI Logo',
         src: 'img/icon.svg',
       },
       items: [
