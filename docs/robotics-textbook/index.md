@@ -1,4 +1,4 @@
-# Intelligent robotics in a nutshell
+# Preface
 
 Welcome to intelligent robotics. I am going to attempt to cram everything I know into 10 chapters.
 
