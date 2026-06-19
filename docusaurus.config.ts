@@ -20,7 +20,7 @@ const config: Config = {
   url: 'https://michaelburke.co.za',
   baseUrl: '/physical-ai/',
   organizationName: 'mgb45', 
-  projectName: 'Physical AI: Robotics, Learning, and Control in the Real World', 
+  projectName: 'physical-ai', 
   trailingSlash: false, 
   // --------------------------------------------
 
