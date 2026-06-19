@@ -182,7 +182,7 @@ $$
 T_{0n} = T_{01} T_{12} \dots T_{n-1,n}
 $$ 
 
-We can use this to describe a sequence of poses as a robot moves, or the static pose of a more complex robot, like this PR2 robot [(PR2 was a very cool robot released in 2010)](https://robotsguide.com/robots/pr2). We can chain transformations together to build a skeleton or kinematic transform tree (TF) that describes our robot. More on this in [week 7.](../week-06-kinematics/)
+We can use this to describe a sequence of poses as a robot moves, or the static pose of a more complex robot, like this PR2 robot [(PR2 was a very cool robot released in 2010)](https://robotsguide.com/robots/pr2). We can chain transformations together to build a skeleton or kinematic transform tree (TF) that describes our robot. More on this in [week 7.](../week-06-kinematics/index.md)
 
 ![A TF tree showing multiple coordinate frames on a PR2 Robot.](/img/week-01/TFtree.png)
 

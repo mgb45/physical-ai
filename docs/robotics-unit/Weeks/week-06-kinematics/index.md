@@ -22,13 +22,13 @@ $$
 \mathcal{C} \subset \mathbb{R}^n.
 $$
 
-This is exactly the idea from [Week 2](../week-02-modelling/): the configuration is the minimal set of variables needed to describe the robot's pose. For a mobile robot, we often used $(x,y,\theta)$. For a robot arm, we usually use the joint vector $\mathbf{q}$.
+This is exactly the idea from [Week 2](../week-02-modelling/index.md): the configuration is the minimal set of variables needed to describe the robot's pose. For a mobile robot, we often used $(x,y,\theta)$. For a robot arm, we usually use the joint vector $\mathbf{q}$.
 
 The tip of the arm, called the **end-effector**, exists somewhere in **task space**. This is the space where we actually want things to happen: picking up a cup, pressing a button, turning a valve, inserting a peg, or waving at a person. The central question is therefore: how do joint values map to end-effector poses? This is the **kinematics problem**.
 
 ## DH parameters
 
-To solve kinematics problems, we need a systematic way to describe the geometry of an articulated chain. In [Week 1](../week-01-state-representations/), we introduced homogeneous transformations:
+To solve kinematics problems, we need a systematic way to describe the geometry of an articulated chain. In [Week 1](../week-01-state-representations/index.md), we introduced homogeneous transformations:
 
 $$
 T = \begin{bmatrix} R & d \ 0 & 1 \end{bmatrix},

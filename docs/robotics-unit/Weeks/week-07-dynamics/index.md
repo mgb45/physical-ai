@@ -1,6 +1,6 @@
 # Week 7: Articulated robots and dynamics
 
-Last week we covered [kinematics](../week-06-kinematics/): the geometry of how joint angles map to end-effector poses. Kinematics tells us where the robot is and where the end-effector can go, but it deliberately ignores an important question:
+Last week we covered [kinematics](../week-06-kinematics/index.md): the geometry of how joint angles map to end-effector poses. Kinematics tells us where the robot is and where the end-effector can go, but it deliberately ignores an important question:
 
 > what actually makes the arm move?
 
