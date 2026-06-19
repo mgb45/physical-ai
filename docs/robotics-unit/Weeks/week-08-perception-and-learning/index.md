@@ -1,769 +1,741 @@
 # Week 8: Robot perception and learning
 
-In Week 2 we covered how sensors work and what information they provide. This week we build on that foundation.
+So far, we have built most of the classical robotics stack. We have represented robot state, written down kinematic and dynamic models, designed controllers, estimated state with recursive Bayes filters, built maps, planned paths, and described the kinematics and dynamics of manipulators.
 
-Reality check:
+A common theme has been that we first write down a model, and then use that model to estimate, plan, or control. In system identification, we already saw the first step toward learning: the structure of the model was known, but some parameters were unknown, so we estimated them from data.
 
-> Robots don’t get state. They get **sensors**.
+This week extends that idea.
 
-And sensors don’t give truth — they give **measurements**, at a certain rate, with noise, delays, bias, distortions, missing data, and occasional lies.
+In many robotics problems, the model is not fully known, the state is not directly available, and the controller is difficult to design by hand. A camera gives pixels, not object poses. A depth camera gives points, not a grasp strategy. A demonstration gives examples of behaviour, not the rule that generated them. A real robot behaves differently from its nominal model because of friction, backlash, compliance, cable forces, wear, payload changes and contact.
 
-This week is about:
-1. how we turn raw sensor data into **useful state / features**,
-2. and how we can learn policies from data (imitation learning / behaviour cloning / “robot learning”).
+**Robot learning** is the use of data to learn some part of the robotics pipeline: a representation, a perception model, a dynamics model, a policy, a reward, or a correction to an existing model.
 
-If you only remember one message:
+The aim is not to replace modelling. The aim is to use data where modelling is difficult, while still using structure wherever we have it.
 
-> In robotics, *perception* is about building a usable representation of the world from measurements, and *learning* is about building a usable policy (or model) from data.
+A useful principle for the rest of the week is:
 
----
+> model what you know, and learn what you cannot model.
 
-## Deep learning for perception: from sensors to states
+## What does it mean to learn?
 
-Before we talk about how to learn *policies*, we need to talk about how to turn raw sensor data into something useful.
+At its simplest, learning means fitting a function from examples.
 
-In classical robotics, perception pipelines were hand-engineered: a human decided which features to extract, which thresholds to apply, and how to fuse sensor modalities. Deep learning changed this: we can now train end-to-end models that learn a mapping from pixels (or point clouds, or spectrograms) directly to the quantities we care about.
-
-The canonical deep-learning perception pipeline looks like:
+Suppose we collect a dataset
 
 $$
-\text{sensor data} \xrightarrow{f_\phi} \text{features} \xrightarrow{g_\psi} \text{state / label}
+\mathcal{D} = \{(x_i, y_i)\}_{i=1}^N,
 $$
 
-where $f_\phi$ is a learned feature extractor (backbone) and $g_\psi$ is a task-specific head. What differs between tasks is *what* $g_\psi$ predicts.
-
----
-
-### Task taxonomy: classification, regression, segmentation
-
-The three most common perception tasks in robotics map onto three standard supervised-learning problems.
-
-#### Classification
-
-**What we want:** assign a discrete label from a fixed set.
-
-**Robotics examples:**
-- *Traffic light state* — predict \{red, yellow, green\}.
-- *Object category* — predict which object class is present.
-- *Scene context* — predict road type, terrain type, indoor/outdoor.
-
-**Output:** a probability distribution over $C$ classes, produced by a softmax head:
+where $x_i$ is an input and $y_i$ is the desired output. We choose a family of functions $f_\theta$, parameterised by $\theta$, and find parameters that make the predictions close to the data:
 
 $$
-\hat{y} = \text{softmax}(W h + b), \qquad \hat{y} \in \mathbb{R}^C
+\hat{y}_i = f_\theta(x_i).
 $$
 
-**Loss:** cross-entropy between prediction and one-hot ground-truth label $y$:
+For regression, where $y_i$ is continuous, a familiar loss is squared error:
 
 $$
-\mathcal{L}_\text{cls} = -\sum_{c=1}^C y_c \log \hat{y}_c
+\mathcal{L}(\theta) = \sum_{i=1}^{N} \|f_\theta(x_i) - y_i\|^2.
 $$
 
-**Backbone choice:** ResNet, EfficientNet, or a Vision Transformer (ViT) pre-trained on ImageNet, fine-tuned on task data.
-
-#### Regression
-
-**What we want:** predict a continuous quantity.
-
-**Robotics examples:**
-- *Object pose estimation* — predict 6-DoF pose $(x, y, z, \phi, \theta, \psi)$ of an object in the camera frame. Used downstream in grasping.
-- *Grasp point prediction* — predict the pixel location (and optionally depth, width, angle) of where to grasp an object.
-- *Keypoint detection* — predict 2-D image coordinates of semantic landmarks on an object.
-
-**Output:** a vector $\hat{y} \in \mathbb{R}^d$ produced by a fully-connected head after the backbone features.
-
-**Loss (baseline):** mean squared error:
+This should look very familiar from linear regression and from system identification. In fact, system identification is a learning problem. If we write
 
 $$
-\mathcal{L}_\text{reg} = \|\hat{y} - y\|^2
+y = \Phi \theta + \epsilon,
 $$
 
-For orientation, MSE on Euler angles is problematic (gimbal lock, discontinuities at $\pm\pi$). In practice, represent rotations as rotation matrices or unit quaternions and use a geodesic / angular loss, or predict the 6D continuous representation.
+then least squares estimates the parameters $\theta$ from input-output data. The difference in modern robot learning usually only that the function class may be richer, the data may be higher-dimensional, and the quantity being learned may sit inside a closed-loop robot system.
 
-For grasp quality maps, the GG-CNN family predicts a per-pixel grasp-quality, angle, and width map in a single forward pass, making grasp synthesis fast enough for reactive control.
+For example, the input $x_i$ might be an image, a lidar scan, a joint state, or a short history of observations. The output $y_i$ might be an object class, a 6-DoF pose, the next state of the robot, or the action a human demonstrator would take.
 
-> Redmon, J., and Angelova, A. (2015). "Real-time grasp detection using convolutional neural networks." In *ICRA*.
-
-> Morrison, D., Corke, P., and Leitner, J. (2020). "Learning robust, real-time, reactive robotic grasping." *The International Journal of Robotics Research*, 39(2–3), 183–201.
-
-#### Segmentation
-
-**What we want:** assign a label (or mask) to every pixel (or point in 3-D).
-
-Three related sub-tasks:
-
-| Sub-task | Output | Robotics use |
-|---|---|---|
-| Semantic segmentation | Per-pixel class label | Drivable surface, lane marking classification |
-| Instance segmentation | Per-pixel class + instance ID | Individual object manipulation |
-| Panoptic segmentation | Semantic + instance, unified | Full scene understanding |
-
-**Drivability and lane classification** are typical semantic segmentation tasks:
-- classes: `{road, lane-marking, sidewalk, vehicle, pedestrian, background}`
-- the network predicts a class probability for every pixel
-- downstream, a robot can reason about which pixels form a traversable corridor
-
-**Loss:** standard cross-entropy summed over pixels:
+The basic supervised-learning pattern is therefore:
 
 $$
-\mathcal{L}_\text{seg} = -\frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W} \sum_{c=1}^C y_{ijc}\log \hat{y}_{ijc}
+\text{input data} \longrightarrow \text{model} \longrightarrow \text{predicted output}.
 $$
 
-For class-imbalanced scenes (road is 90 % of pixels), weighted or focal variants help.
+The robotics question is: **what should the input and output be?**
 
----
+That design choice determines what kind of learning problem we are solving.
 
-### Common architectures
+## Why is learning useful in robotics?
 
-#### Masked R-CNN (instance segmentation from images)
+Learning is useful when an important mapping is hard to write down by hand but examples are available.
 
-Masked R-CNN extends Faster R-CNN with an additional mask prediction branch.
+A few examples make this concrete.
 
-> He, K., Gkioxari, G., Dollár, P., and Girshick, R. (2017). "Mask R-CNN." In *ICCV*.
+A camera image contains information about objects, but writing an analytic equation from pixels to object identity is almost impossible. Instead, we collect labelled images and learn a perception model.
 
-The pipeline has three stages:
+A robot arm has known rigid-body dynamics, but the exact friction, payload, cable forces or contact effects may be unknown. Instead of deriving every missing effect from first principles, we can learn a residual (additive) dynamics model from measured motion data.
 
-1. **Backbone + FPN** — a deep CNN (e.g., ResNet-50) extracts multi-scale feature maps via a Feature Pyramid Network.
-2. **Region Proposal Network (RPN)** — a sliding-window classifier proposes candidate bounding boxes ("regions of interest", RoIs) at multiple scales.
-3. **Per-RoI heads** — for each proposed region:
-   - a classification head predicts the object class,
-   - a regression head refines the box coordinates,
-   - a mask head predicts a binary foreground/background mask for every pixel inside the box.
+A human demonstrator may know how to perform a task, such as inserting a plug or folding cloth, even if we cannot easily write down the cost function or controller. Instead of hand-designing the policy, we can learn from demonstrations.
 
-The three losses are trained jointly:
+This gives three important learning problems in robotics:
 
-$$
-\mathcal{L} = \mathcal{L}_\text{cls} + \mathcal{L}_\text{box} + \mathcal{L}_\text{mask}
-$$
+1. **Perception learning:** learn a mapping from raw observations to useful state or features.
+2. **Dynamics learning:** learn how the system changes when actions are applied.
+3. **Imitation learning:** learn a policy from demonstrations.
 
-In robotics, Masked R-CNN is used to:
-- segment individual objects on a cluttered tabletop prior to grasping,
-- track objects across frames,
-- provide region proposals for 6-DoF pose estimators.
+Reinforcement learning is another important case, where the robot learns from reward through trial and error. We will cover that in detail next week. This week we only need the high-level idea that reinforcement learning learns behaviour from interaction, whereas imitation learning learns behaviour from examples provided by an expert.
 
-#### SAM — Segment Anything Model
+## Perception as learned state estimation
 
-SAM is a promptable segmentation foundation model trained on 1 billion+ masks.
-
-> Kirillov, A., Mintun, E., Ravi, N., Mao, H., et al. (2023). "Segment Anything." In *ICCV*.
-
-Architecture:
-- **Image encoder** — a heavyweight Vision Transformer (ViT-H) runs once per image to produce a dense embedding.
-- **Prompt encoder** — encodes sparse prompts (points, bounding boxes) or dense prompts (rough masks) into a prompt embedding.
-- **Mask decoder** — a lightweight transformer decoder predicts one or more masks from the image embedding + prompt embedding, with associated confidence scores.
-
-Key properties for robotics:
-- *Zero-shot*: given a click or box prompt it can segment any object without task-specific fine-tuning.
-- *Amortised cost*: the image encoder (expensive) runs once; the decoder (cheap) can be called interactively at low latency.
-- *SAM 2* extends this to video, propagating masks temporally — useful for object tracking during manipulation.
-
-A common robotics workflow: detect an object with a fast open-vocabulary detector (e.g., OWL-ViT or Grounding DINO, prompted with a text label), then pass the resulting bounding box as a prompt to SAM to get a clean instance mask.
-
-#### PointNet (3-D point cloud processing)
-
-Cameras give 2-D images; depth cameras and LiDAR give 3-D point clouds. A point cloud is a set of $N$ 3-D points $\{p_i\} \subset \mathbb{R}^3$ (possibly with additional features like colour or intensity). Unlike images, point clouds have no fixed spatial ordering.
-
-PointNet is the canonical deep network for unordered 3-D point sets.
-
-> Qi, C. R., Su, H., Mo, K., and Guibas, L. J. (2017). "PointNet: Deep learning on point sets for 3D classification and segmentation." In *CVPR*.
-
-Key ideas:
-
-1. **Permutation invariance** — apply a shared MLP independently to each point (a point-wise function), then aggregate with a symmetric function (max-pooling):
+In Week 2, we described sensors using measurement models such as
 
 $$
-f(\{p_1,\ldots,p_N\}) = g\!\left(\max_{i=1}^N h(p_i)\right)
+z_t = h(x_t) + v_t,
 $$
 
-where $h$ is a point-wise MLP and $g$ is a classification/regression head. Because max-pooling is symmetric, the output does not depend on point ordering.
-
-2. **T-Net (spatial transformer)** — a mini-network predicts a $3 \times 3$ (and optionally $64 \times 64$) alignment transform, applied to the point cloud before feature extraction. This provides some invariance to rigid-body transformations.
-
-Outputs:
-- **Global feature** → classification (object category from LiDAR scan).
-- **Per-point features** (global feature concatenated with local features) → segmentation of each point.
-
-**PointNet++ (Qi et al., 2017)** extends PointNet with hierarchical local grouping (ball-query neighborhoods), capturing local geometry that the original network misses.
-
-In robotics:
-- classify or detect objects in LiDAR sweeps (autonomous driving),
-- estimate 6-DoF object pose from a depth image converted to a point cloud,
-- segment a robot's own body points from environmental points.
-
-#### Multimodal models
-
-Real robots have multiple sensor streams: RGB cameras, depth cameras, LiDAR, IMU, force-torque sensors, proprioception. No single sensor is sufficient.
-
-**Fusion strategies:**
-
-| Strategy | Where | When to use |
-|---|---|---|
-| Early fusion | Concatenate raw inputs | Inputs are spatially aligned (e.g., RGB-D) |
-| Late fusion | Combine high-level features or predictions | Modalities have very different scales / rates |
-| Cross-attention fusion | Transformer cross-attention between modalities | Rich semantic alignment needed (e.g., vision + language) |
-
-**Common multimodal pipelines in robotics:**
-
-*Vision + language (VLMs applied to robotics):*
-Large vision-language models (CLIP, BLIP-2, LLaVA) are pre-trained on image–text pairs at internet scale. The shared embedding space means you can query "find the red mug" and retrieve the matching image region. In manipulation, this enables open-vocabulary object detection: the robot receives a language goal and the VLM grounds it to a region in the image.
-
-*RGB-D fusion for pose estimation:*
-Encode the RGB image with a 2-D CNN (for texture/appearance) and the depth image or point cloud with PointNet (for geometry), then concatenate features before a pose regression head. The two streams are complementary: texture helps distinguish similar shapes; geometry helps in low-texture or adverse-lighting conditions.
-
-*LiDAR + camera fusion for outdoor autonomy:*
-Project LiDAR points onto the image plane (using camera intrinsics and extrinsics) to decorate each 3-D point with an RGB value. Alternatively, project image features back onto LiDAR points (e.g., PointPainting). Multi-modal networks like BEVFusion fuse everything in a common bird's-eye-view (BEV) representation.
-
-> Liu, Z., Tang, H., Amini, A., Yang, X., Mao, H., Rus, D., and Han, S. (2023). "BEVFusion: Multi-task multi-sensor fusion with unified bird's-eye view representation." In *ICRA*.
-
----
-
-### Putting it together: typical sensor-to-state pipelines
-
-**Autonomous driving example:**
+where $x_t$ is the underlying state, $z_t$ is the measurement and $v_t$ is noise. In Week 4, we used recursive Bayes filtering to estimate state from measurements:
 
 $$
-\underbrace{\text{RGB camera}}_{\text{front/side}} \xrightarrow{\text{SegNet / DeepLab}} \underbrace{\text{drivable mask + lanes}}_{\text{semantic}}
+p(x_t \mid z_{1:t}, u_{1:t}).
+$$
+
+This is already an inference problem: the robot does not directly know the state; it must infer it from observations.
+
+For simple sensors, the measurement model $h$ may be known. A wheel encoder measures wheel rotation. An IMU measures acceleration and angular velocity. A range sensor measures distance along a ray.
+
+For rich sensors, the measurement model is much harder. A camera image is an array of pixel intensities. The state we care about may be the pose of a mug, the drivable part of a road, the location of a person, or whether a drawer is open. These quantities are not directly measured. They are latent variables that must be inferred.
+
+We can write this abstractly as
+
+$$
+\hat{x}_t = f_\theta(o_t),
+$$
+
+where $o_t$ is an observation, such as an image or point cloud, and $\hat{x}_t$ is an estimated state, feature or label. The function $f_\theta$ is learned from data.
+
+This is why perception and state estimation are closely related. A classical estimator often uses a hand-written measurement model. A learned perception system uses data to learn part of that measurement model.
+
+A modern robot stack often combines both. For example, a neural network might detect objects in an image, while a Kalman filter tracks their positions over time. A SLAM system might use learned visual features, but still use geometric optimisation for pose estimation. Learning does not remove the need for estimation; it often supplies better measurements to the estimator.
+
+## Basic supervised learning problems
+
+Most perception learning begins with supervised learning. We collect examples where the input and desired output are both known, then train a model to predict the output from the input.
+
+### Classification
+
+In classification, the output is a discrete label. For example, a robot might classify terrain as `floor`, `grass`, `gravel` or `stairs`, or classify a traffic light as `red`, `yellow` or `green`.
+
+If there are $C$ possible classes, the model usually outputs a probability vector
+
+$$
+\hat{y} \in \mathbb{R}^C,
+$$
+
+where $\hat{y}_c$ is the predicted probability of class $c$. A common loss is cross-entropy:
+
+$$
+\mathcal{L}_{\text{cls}} = -\sum_{c=1}^{C} y_c \log \hat{y}_c,
+$$
+
+where $y$ is a one-hot vector representing the true class.
+
+Classification is useful when the robot needs a symbolic or categorical decision, such as identifying an object class or recognising a terrain type.
+
+### Regression
+
+In regression, the output is continuous. For example, a robot might predict an object position, a joint torque correction, a grasp point, or the next state of the system.
+
+The simplest regression loss is mean squared error:
+
+$$
+\mathcal{L}_{\text{reg}} = \|\hat{y} - y\|^2.
+$$
+
+Regression is directly connected to system identification. In both cases, we fit a function that maps inputs to continuous outputs. The difference is that the function may be nonlinear and the inputs may be high-dimensional.
+
+For robotics, we need to be careful about what the continuous output represents. Predicting angles with squared error can be problematic because angles wrap around at $\pm\pi$. Predicting rotations also requires care: Euler angles can have singularities, so quaternions or rotation matrices are often better choices.
+
+### Segmentation
+
+In segmentation, the model assigns a label to every pixel in an image or every point in a point cloud. This is useful when the robot needs spatial structure rather than a single label.
+
+For an image of height $H$ and width $W$, semantic segmentation predicts a class probability at every pixel:
+
+$$
+\hat{y}_{ij} \in \mathbb{R}^C.
+$$
+
+The loss is usually cross-entropy summed or averaged over pixels:
+
+$$
+\mathcal{L}_{\text{seg}} = -\frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W}\sum_{c=1}^{C} y_{ijc}\log \hat{y}_{ijc}.
+$$
+
+Segmentation is important for robotics because actions are spatial. A mobile robot needs to know which parts of the image are drivable. A manipulation robot may need to separate one object from another in a cluttered scene.
+
+## From raw sensors to useful state
+
+A learned perception system is usually not the whole robot. It is one component that produces information for the rest of the stack.
+
+For autonomous driving, a simplified perception pipeline might be:
+
+$$
+\text{camera image} \rightarrow \text{drivable area and lane markings},
 $$
 
 $$
-\underbrace{\text{LiDAR}}_{\text{360°}} \xrightarrow{\text{PointPillars / CenterPoint}} \underbrace{\text{3-D bounding boxes}}_{\text{objects}}
+\text{lidar scan} \rightarrow \text{3-D object detections},
 $$
 
 $$
-\underbrace{\text{All sensors}} \xrightarrow{\text{fusion + tracking}} \underbrace{x_t = [\text{ego pose, lane position, object list}]}_{\text{state for planning}}
+\text{detections over time} \rightarrow \text{tracked objects and ego state}.
 $$
 
-**Tabletop manipulation example:**
+The planner does not usually act directly on raw pixels. It acts on a structured representation: the road layout, object positions, object velocities and predicted trajectories.
+
+For tabletop manipulation, a pipeline might be:
 
 $$
-\underbrace{\text{RGB-D camera}} \xrightarrow{\text{Masked R-CNN / SAM}} \underbrace{\text{instance masks}}
-$$
-
-$$
-\underbrace{\text{instance mask + depth}} \xrightarrow{\text{pose estimator (e.g. FoundPose, GDR-Net)}} \underbrace{T_{\text{obj}}^{\text{cam}} \in SE(3)}_{\text{6-DoF object pose}}
+\text{RGB-D image} \rightarrow \text{object mask},
 $$
 
 $$
-\underbrace{T_{\text{obj}}^{\text{cam}}} \xrightarrow{\text{grasp planner / GG-CNN}} \underbrace{(x_g, y_g, z_g, \theta_g)}_{\text{grasp point and angle}}
+\text{mask + depth} \rightarrow \text{object pose},
 $$
 
-In both cases, the output is a structured state that a planner or policy can act on — connecting deep learning perception back to the control and planning frameworks from earlier weeks.
-
----
-
-## Learning from demonstration
-
-Now the “learning” part.
-
-We previously framed robotics as optimal control:
-
 $$
-u(t) = \pi(x(t))
+\text{object pose} \rightarrow \text{grasp or motion plan}.
 $$
 
-In learning from demonstration (LfD), we assume we have data from an expert:
-- states (or observations),
-- actions,
-- maybe rewards (often not),
-- maybe multiple tasks.
+Again, the learned perception system converts raw observations into state-like quantities that connect back to planning and control.
 
-Goal: learn a policy $\pi_\theta$ that imitates expert behaviour.
+This is a useful way to think about deep learning in robotics. A neural network is often a complicated measurement function. It turns messy observations into estimates that the rest of the robot can use.
 
-A key distinction:
+## Dynamics learning
 
-- **state** $x$ (latent, clean, often unavailable)
-- **observation** $o$ (what the robot actually sees: images, lidar, proprioception)
+The first major robot learning problem is dynamics learning.
 
-So a more honest policy is:
+In earlier weeks, we wrote robot models such as
+
+$$
+x_{t+1} = f(x_t, u_t)
+$$
+
+or, in continuous time,
+
+$$
+\dot{x} = f(x,u).
+$$
+
+In dynamics learning, we collect transition data
+
+$$
+\mathcal{D} = \{(x_t, u_t, x_{t+1})\}_{t=1}^{N}
+$$
+
+and fit a model
+
+$$
+\hat{x}_{t+1} = f_\theta(x_t, u_t).
+$$
+
+This is supervised learning: the input is $(x_t,u_t)$ and the target output is $x_{t+1}$.
+
+A basic loss is
+
+$$
+\mathcal{L}(\theta) = \sum_{t=1}^{N} \|f_\theta(x_t,u_t) - x_{t+1}\|^2.
+$$
+
+This directly generalises system identification. In classical system identification, we may know the model form and estimate a small number of parameters. In learned dynamics, we may use a more flexible function approximator when the model form is uncertain or too complicated.
+
+### Learning a residual model
+
+In robotics, we often do know a lot about the dynamics. We know the rigid-body equations, the kinematics, the actuator limits and the approximate mass properties. It would be wasteful to ignore that knowledge.
+
+A common approach is to learn only the part the model gets wrong:
+
+$$
+x_{t+1} = f_{\text{known}}(x_t,u_t) + f_\theta(x_t,u_t).
+$$
+
+Here $f_{\text{known}}$ might be a kinematic model, a rigid-body simulator or a nominal dynamics model. The learned term $f_\theta$ is a residual correction.
+
+This is a very important pattern in robot learning. It says: use physics for the part we understand, and use data for the part we do not.
+
+Residual models can compensate for friction, delays, soft contacts, backlash, unmodelled payloads or systematic simulator errors. They are usually more data-efficient than learning the full dynamics from scratch because the learned model only needs to explain the error.
+
+### Probabilistic dynamics models
+
+A deterministic dynamics model predicts one next state:
+
+$$
+\hat{x}_{t+1} = f_\theta(x_t,u_t).
+$$
+
+But real robots are uncertain. Sensors are noisy, contact is unpredictable and the same action may not always produce exactly the same result. We can instead learn a probabilistic model:
+
+$$
+p_\theta(x_{t+1} \mid x_t,u_t).
+$$
+
+For example, the model might output a Gaussian distribution:
+
+$$
+p_\theta(x_{t+1} \mid x_t,u_t) = \mathcal{N}\left(\mu_\theta(x_t,u_t), \Sigma_\theta(x_t,u_t)\right).
+$$
+
+The mean predicts the most likely next state, while the covariance represents uncertainty. This connects directly back to recursive Bayes filtering: if the dynamics are uncertain, we should propagate uncertainty through the model rather than only predicting a single trajectory.
+
+Probabilistic dynamics are especially useful for planning. A controller should behave differently when a model is confident than when it is uncertain.
+
+## Learning for control
+
+Once we have a learned dynamics model, we can use it inside a controller or planner.
+
+Recall the finite-horizon optimal control problem:
+
+$$
+u^*_{t:t+T} = \arg\min_{u_{t:t+T}} \mathbb{E}\left[\sum_{k=t}^{t+T} J(x_k,u_k)\right].
+$$
+
+Previously, the dynamics inside this optimisation came from a hand-written model. With dynamics learning, the rollout can instead use
+
+$$
+\hat{x}_{k+1} = f_\theta(\hat{x}_k,u_k).
+$$
+
+This gives **model-based learning for control**. We learn a model from data, then use optimal control or planning to choose actions.
+
+This is closely related to the methods students have already seen. LQR and iLQR require a model of how state changes with action. If the model is not known exactly, we can estimate it. We can use ILQR with a learned non-linear dynamics model. Alternatively, in the simplest case, we can assume a linear model and do local linear system identification:
+
+$$
+x_{t+1} \approx A x_t + B u_t.
+$$
+
+Then LQR can be applied to the learned local model. More generally, we can learn nonlinear dynamics and use model predictive control to repeatedly plan over a short horizon.
+
+This is one of the cleanest bridges from system identification to robot learning.
+
+## Imitation learning
+
+The second major robot learning problem this week is imitation learning.
+
+In imitation learning, we do not start with a reward function. Instead, we start with demonstrations. An expert shows the robot what to do, and the robot learns to imitate the expert.
+
+A demonstration dataset contains trajectories:
+
+$$
+\mathcal{D} = \{\tau_i\}_{i=1}^{M},
+$$
+
+where each trajectory is a sequence
+
+$$
+\tau_i = \{(o_t, a_t^E)\}_{t=1}^{T_i}.
+$$
+
+Here $o_t$ is the observation available to the robot, and $a_t^E$ is the action taken by the expert.
+
+The goal is to learn a policy
 
 $$
 a_t = \pi_\theta(o_t)
 $$
 
-This is robotics’ version of “learning from data”, with the complication that errors compound over time because the policy affects the next observation.
+that produces actions similar to the expert.
 
----
+This is again supervised learning. The input is the observation $o_t$, and the target output is the expert action $a_t^E$.
 
-### Motion primitives and Dynamic movement primitives
+### Behaviour cloning
 
-A classic way to make learning easier is to not learn raw control directly, but to learn parameters of a structured movement.
+The simplest imitation-learning method is **behaviour cloning**. We fit the policy directly to the demonstrations.
 
-A “motion primitive” is a reusable chunk of behaviour (reach, grasp, push).
-
-**Dynamic Movement Primitives (DMPs)** represent trajectories as stable dynamical systems with a learnable forcing term.
-
-A simplified 1D DMP form:
-$$
-\tau \dot{v} = \alpha_z(\beta_z(g - y) - v) + f(s)
-$$
+For continuous actions, such as joint velocities or end-effector pose increments, a basic objective is
 
 $$
-\tau \dot{y} = v
-$$
-- $y$ = position
-- $v$ = velocity
-- $g$ = goal
-- $\tau$ = time scaling
-- $f(s)$ = nonlinear forcing function of phase $s$
-- the $(g - y)$ term makes it converge (stability bias)
-
-DMPs are popular because:
-- you can fit them from demonstrations,
-- you can change goal $g$ and speed $\tau$,
-- and you get some robustness “for free”.
-
-> Ijspeert, A. J., Nakanishi, J., Hoffmann, H., Pastor, P., and Schaal, S. (2013). "Dynamical Movement Primitives: Learning Attractor Models for Motor Behaviors." *Neural Computation*, 25(2), 328–373.
-
----
-
-### Behaviour cloning with neural networks (crash course)
-
-Behaviour cloning (BC) is supervised learning on demonstration data.
-
-> Pomerleau, D. A. (1989). "ALVINN: An Autonomous Land Vehicle in a Neural Network." In *Advances in Neural Information Processing Systems (NeurIPS)*, vol. 1, pp. 305–313.
-
-You collect a dataset:
-$$
-\mathcal{D} = \\{(o_i, a_i)\\}_{i=1}^N
+\min_\theta \sum_{(o,a^E)\in \mathcal{D}} \|\pi_\theta(o) - a^E\|^2.
 $$
 
-and fit a parametric policy $\pi_\theta$ by minimizing a loss:
-
-#### Discrete actions (classification)
-
-If actions are discrete (e.g., high-level decisions), use cross-entropy:
+For discrete actions, such as choosing between a small set of high-level behaviours, we can use cross-entropy:
 
 $$
-\min_\theta \; \mathbb{E}_{(o,a)\sim \mathcal{D}} \big[-\log \pi_\theta(a \mid o)\big]
+\min_\theta \sum_{(o,a^E)\in \mathcal{D}} -\log \pi_\theta(a^E \mid o).
 $$
 
-#### Continuous actions (regression)
+Behaviour cloning is attractive because it is simple. It reduces robot learning to supervised learning.
 
-Robots often have continuous actions (joint velocities, torques).
+However, there is an important difference between ordinary supervised learning and robot control. In ordinary supervised learning, a prediction error usually does not affect the next input. In robotics, it does. If the policy makes a small mistake, the robot moves to a slightly different state. Then it observes a situation that may not have appeared in the demonstration data. This can lead to more errors, which lead to even less familiar states.
 
-The simplest BC uses MSE:
+This is called **covariate shift** or **distribution shift**.
 
-$$
-\min_\theta \; \mathbb{E}_{(o,a)\sim \mathcal{D}} \big[\|\pi_\theta(o) - a\|^2\big]
-$$
-
-A more probabilistic and often better-behaved approach is to predict a distribution, e.g. Gaussian:
+Training data comes from the expert distribution:
 
 $$
-\pi_\theta(a\mid o) = \mathcal{N}\big(\mu_\theta(o), \Sigma_\theta(o)\big)
+o_t \sim d_{\pi_E},
 $$
 
-and maximize likelihood:
+but deployment data comes from the learned policy distribution:
 
 $$
-\min_\theta \; \mathbb{E}_{(o,a)\sim \mathcal{D}} \Big[ \frac{1}{2}(a-\mu_\theta(o))^T\Sigma_\theta(o)^{-1}(a-\mu_\theta(o)) + \frac{1}{2}\log|\Sigma_\theta(o)| \Big]
+o_t \sim d_{\pi_\theta}.
 $$
 
-Why this matters:
-- if the expert is stochastic / multi-modal, MSE averages actions (bad for control),
-- predicting uncertainty gives you a confidence signal.
+If these distributions differ, low supervised-learning loss does not guarantee good closed-loop performance.
 
-#### Multi-modal actions (mixture density / discretization)
+### DAgger
 
-If there are multiple valid actions (common in manipulation), one Gaussian is not enough.
+One way to reduce distribution shift is **DAgger**, or Dataset Aggregation. The idea is to let the learned policy visit its own states, then ask the expert what should have been done there.
 
-Option A: Mixture of Gaussians
-$$
-\pi_\theta(a\mid o)=\sum_{k=1}^K w_k(o)\,\mathcal{N}\big(\mu_k(o),\Sigma_k(o)\big)
-$$
+The procedure is:
 
-Option B: Discretize actions into bins (works surprisingly well for some robot policies).
+1. Train an initial policy from demonstrations.
+2. Run the policy to collect observations it actually visits.
+3. Ask the expert to label those observations with correct actions.
+4. Add the new data to the dataset.
+5. Retrain the policy.
 
-#### Sequence problems (RNN / Transformer policies)
-
-In many tasks, the right action depends on history:
+Mathematically, the dataset is updated as
 
 $$
-a_t = \pi_\theta(o_{\{1:t\}})
+\mathcal{D} \leftarrow \mathcal{D} \cup \{(o_t, a_t^E)\}_{t=1}^{T}.
 $$
 
-You can model this with:
-- RNN/LSTM/GRU,
-- Transformers over tokenized observations,
-- or maintain a belief state $\hat{x}_t$ via a filter, then act on it.
+DAgger makes the training distribution closer to the deployment distribution. This is often much more important than choosing a more complicated neural network.
 
-A common practical approach:
-- encode image observations with a CNN / ViT,
-- fuse with proprioception,
-- use a temporal model to output actions.
+## Choosing the action representation
 
-#### Diffusion policies (score matching view)
+A learned policy does not simply output “the robot moves”. We must choose the action representation.
 
-Mixture models require fixing the number of modes, and a single Gaussian collapses to averaging.
-A more powerful alternative is to represent the action distribution *implicitly* via its **score function** — the gradient of the log-density with respect to the action — and then **integrate** that gradient to produce samples.
-
-**The key object: the score**
-
-Define the score of the (conditional) action distribution:
+For a mobile robot, the action might be
 
 $$
-s(a \mid o) = \nabla_a \log p(a \mid o)
+a_t = (v_t, \omega_t),
 $$
 
-The score points in the direction of increasing log-probability: it tells you which way to nudge an action to make it more likely under the expert distribution.
-A neural network $s_\theta(a, o)$ is trained to approximate this gradient field.
+where $v_t$ is linear velocity and $\omega_t$ is angular velocity.
 
-**Sampling = integrating the score (Langevin dynamics)**
+For a manipulator, the action might be joint positions, joint velocities, joint torques, end-effector pose increments, or gripper commands.
 
-Given $s_\theta$, you can draw a sample from $p(a \mid o)$ by starting from Gaussian noise and following the estimated gradient, injecting a small amount of noise at each step:
+This choice matters because it determines the difficulty and safety of the learning problem. Predicting torques gives the policy direct control over the actuators, but it is easy to destabilise the robot. Predicting end-effector pose increments is often easier and safer, because a lower-level controller can handle the detailed joint control.
 
-$$
-a_{k+1} = a_k + \frac{\eta}{2}\, s_\theta(a_k, o) + \sqrt{\eta}\;\epsilon_k, \qquad \epsilon_k \sim \mathcal{N}(0, I)
-$$
-
-After $K$ steps (with $\eta$ small), $a_K$ is approximately distributed according to $p(a \mid o)$, regardless of how complex or multimodal that distribution is.
-This is an Euler–Maruyama discretisation of the Langevin stochastic differential equation whose stationary distribution is exactly $p(a \mid o)$.
-
-**Training: how do you learn the score without knowing $p$?**
-
-You cannot evaluate $\nabla_a \log p$ directly, but **denoising score matching** lets you train without it.
-For each demonstration action $a$ add scaled Gaussian noise:
+A common manipulation policy outputs
 
 $$
-\tilde{a} = a + \sigma \epsilon, \qquad \epsilon \sim \mathcal{N}(0, I)
+a_t = (\Delta x, \Delta y, \Delta z, \Delta \phi, \Delta \theta, \Delta \psi, g),
 $$
 
-The score of this noisy distribution is:
+where the first six terms describe a small end-effector pose change and $g$ is a gripper command. A classical controller then tracks the desired motion.
+
+This is another example of using structure. The learned model chooses a high-level action, while the existing controller handles stabilisation and actuator-level control.
+
+## Learning policies as probability distributions
+
+A deterministic behaviour cloning policy predicts a single action:
 
 $$
-\nabla_{\tilde{a}} \log p(\tilde{a}) = -\frac{\tilde{a} - a}{\sigma^2} = -\frac{\epsilon}{\sigma}
+a_t = \pi_\theta(o_t).
 $$
 
-So the training loss is simply:
+This can be too restrictive. Many robotics tasks are multi-modal: there may be several valid actions from the same observation. For example, a robot might grasp a cup from the left or from the right. If we train with mean squared error, the policy may average these two actions and choose a bad action in the middle.
+
+A better approach is to model a distribution over actions:
 
 $$
-\mathcal{L}(\theta) = \mathbb{E}_{(o,a)\sim\mathcal{D},\;\epsilon\sim\mathcal{N}(0,I),\;\sigma}\left[\left\|s_\theta(\tilde{a}, \sigma, o) + \frac{\epsilon}{\sigma}\right\|^2\right]
+\pi_\theta(a \mid o).
 $$
 
-The network learns to estimate the direction (and magnitude) needed to move a noisy action back toward the true expert action, across many noise levels $\sigma$.
-
-**Why this matters for robotics**
-
-- **Arbitrary multi-modality** — the gradient field can have multiple basins of attraction; sampling will find them without specifying how many.
-- **High-dimensional actions** — works for full-arm trajectories ("action chunks"), not just single timestep commands.
-- **No mode collapse** — unlike a single Gaussian, the score field does not average over modes.
-
-The cost: inference requires $K$ gradient-field integration steps (typically 10–100), which is slower than a single forward pass. In practice, accelerated samplers (DDIM, consistency models) reduce this to 1–10 steps.
-
-> Chi, C., Feng, S., Du, Y., Xu, Z., Cousineau, E., Burchfiel, B., and Song, S. (2023). "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion." In *Robotics: Science and Systems (RSS)*.
-
-#### Conditioning on goals / tasks
-
-Most real tasks are goal-conditioned:
+For continuous actions, a simple choice is a Gaussian:
 
 $$
-a_t = \pi_\theta(o_t, g)
+\pi_\theta(a \mid o) = \mathcal{N}(\mu_\theta(o), \Sigma_\theta(o)).
 $$
 
-where $g$ might be:
-- a target pose,
-- a language instruction,
-- a desired end state image,
-- a one-hot task ID.
-
-This is the bridge from “one skill” to “many skills”.
-
----
-
-### The core problem in behaviour cloning: covariate shift
-
-BC trains on expert data distribution $o \sim d_{\pi_E}$, but deploys on the robot’s distribution $o \sim d_{\pi_\theta}$. 
-
-If the learned policy makes a small mistake, it visits states the expert never visited in the dataset, and performance can collapse.
-
-You can write the idea as:
-- training minimizes error under $d_{\pi_E}$
-- deployment accumulates error under $d_{\pi_\theta}$
-
-This is why BC can look great in offline metrics but fail on the robot.
-
-#### Mitigation strategies (what practitioners actually do)
-
-1) **Get more data** in the places the policy fails  
-   (not glamorous, often the best option)
-
-2) **Noise injection / domain randomization**  
-   during training, perturb observations or dynamics
-
-3) **DAgger (Dataset Aggregation)**  
-   Iterate:
-   - run $\pi_\theta$ on the robot
-   - have expert label actions for visited observations
-   - add to dataset and retrain
-
-Formally:
-$$
-\mathcal{D} \leftarrow \mathcal{D} \cup \\{(o_t, a^E_t)\\}_{t=1}^T
-$$
-
-DAgger aligns the training distribution with the learned policy distribution.
-
-> Ross, S., Gordon, G., and Bagnell, D. (2011). "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning." In *Proceedings of AISTATS*, pp. 627–635.
-
-4) **Use a stabilizing controller + learned residual**
-   Instead of learning full control:
+Training by maximum likelihood gives the loss
 
 $$
-a = a_{\text{base}}(x) + a_{\text{learned}}(o)
+\mathcal{L}(\theta)
+=
+\frac{1}{2}(a-\mu_\theta(o))^T\Sigma_\theta(o)^{-1}(a-\mu_\theta(o))
++
+\frac{1}{2}\log|\Sigma_\theta(o)|.
 $$
 
-   where $a_{\text{base}}$ is something like a PID / MPC / impedance controller.
-   This massively improves safety and data efficiency.
+The mean represents the predicted action, and the covariance represents uncertainty or variability. This is a probabilistic version of behaviour cloning.
 
-5) **Behaviour Cloning + RL fine-tuning**
-   Initialize with BC, then optimize a reward with RL.
-   (This can fix distribution shift but adds complexity and safety concerns.)
+If the action distribution is strongly multi-modal, one Gaussian may still be insufficient. Mixtures of Gaussians, discretised action bins and diffusion policies are all ways to represent more complex action distributions. The detailed methods are less important here than the principle: when many actions are valid, the policy should not be forced to average them into one action.
 
----
+## Choosing a model class
 
-### What does the network actually output?
+Once we know the input, output and dataset, we still have to choose the kind of model we are going to fit. This is a modelling decision, not just an implementation detail. Different model classes make different assumptions about the task, the data and the structure of the behaviour we are trying to learn.
 
-In robotics, your policy output choice matters:
+A useful way to ask the question is:
 
-- **joint position commands** (easier, often stable if your low-level controller is good)
-- **joint velocities** (common in mobile + manipulation)
-- **torques** (more direct, more powerful, much easier to destabilize)
-- **end-effector pose deltas** (often intuitive for manipulation)
-- **gripper open/close** + continuous arm motion (hybrid action space)
+> what structure do I already believe the solution should have?
 
-A very common practical policy for manipulation is:
-- predict $\Delta x, \Delta y, \Delta z, \Delta \phi, \Delta \theta, \Delta \psi$ (small pose increments)
-- plus gripper command
-- executed at 10–30 Hz with smoothing/clamping
+If the behaviour is a smooth reaching motion, a motion primitive may be enough. If the action distribution is multi-modal, a probabilistic neural policy may be more appropriate. If the task depends on long histories, language instructions or many subtasks, a sequence model may be useful. The model class should match the structure of the problem.
 
----
+### Neural network policies
 
-### Perception + learning: what is the input?
-
-We can roughly group policy inputs:
-
-1) **State-based** (engineered):
-   - pose estimate, object pose, velocities
-   - then learn $\pi_\theta(x)$
-   - easier learning, depends on good perception pipeline
-
-2) **End-to-end** (raw):
-   - images + proprioception
-   - learn $\pi_\theta(o)$ directly
-   - fewer hand-designed modules, more data hungry
-
-A practical hybrid:
-- learn a representation $f_\phi(o)$ (e.g. visual features)
-- control uses $f_\phi(o)$ + proprioception
-- optionally keep a classical estimator in the loop for safety
-
----
-
-### Offline vs online evaluation (the trap)
-
-Offline BC metrics (MSE, accuracy) do not always correlate with robot success.
-
-Why?
-- compounding errors,
-- multi-modal action ambiguity,
-- small timing differences matter.
-
-Rule of thumb:
-> If it doesn’t work in closed-loop rollouts, it doesn’t work.
-
-Always evaluate policies by rolling them out (in sim first, then on hardware cautiously).
-
----
-
-### Safety and deployment hygiene (non-negotiable)
-
-Before running a learned policy on a real robot:
-- saturate actions (limits on velocity/acceleration/torque)
-- add an emergency stop
-- define workspace constraints
-- use a “supervisor” controller if possible
-- start slow (low speed, low force, soft environment)
-
-Robot learning failures are not just “bad predictions” — they’re potential hardware damage.
-
----
-
-## Minimal implementation (behaviour cloning) — practical checklist
-
-### 1) Decide the control interface first
-
-Before you collect *any* data, decide what your policy outputs:
-- Mobile base: $a = [v,\,\omega]$ (linear/angular velocity)
-- Arm: $a = \Delta \mathbf{x}$ (end-effector pose delta) or joint velocities $\dot{\mathbf{q}}$
-- Gripper: binary or continuous $a_g$
-
-This choice determines:
-- what to log,
-- what loss makes sense,
-- what safety limits you must enforce.
-
-### 2) Define your observation vector (and keep it stable)
-
-A common structure:
+The most common choice in modern robot learning is a neural network. At this level, a neural network is just a flexible nonlinear function approximator:
 
 $$
-o_t = \big[\;\text{proprio}_t,\; \text{extero}_t,\; \text{goal}_t\;\big]
+\text{input} \rightarrow \text{many learned intermediate features} \rightarrow \text{output}.
 $$
 
-Examples:
-- proprio: $\mathbf{q},\dot{\mathbf{q}}$, base velocity, IMU angular velocity
-- extero: image, depth, lidar scan, object pose estimate
-- goal: waypoint, desired end-effector pose, language embedding
-
-**Rule:** the observation you train on must match deployment *exactly* (same scaling, same frame, same timestamp convention).
-
-### 3) Log data with timestamps (this matters more than model choice)
-
-Log *at minimum*:
-- $t$ (timestamp, ideally hardware)
-- observation $o_t$
-- expert action $a^E_t$
-- robot state estimate (if available)
-- transforms $T$ (extrinsics / TF tree snapshots), or at least the static calibration used
-
-If you can’t reproduce “what did the robot see at time $t$?”, debugging becomes impossible.
-
-### 4) Dataset format (simple and robust)
-
-Store transitions as sequences, not shuffled single steps:
+For imitation learning, this often means a policy of the form
 
 $$
-\mathcal{D} = \\{\tau_i\\}_{i=1}^M, \quad \tau_i = \\{(o_t, a_t)\\}_{t=1}^{T_i}
+a_t = \pi_\theta(o_t),
 $$
 
-Why sequence storage helps:
-- you can train temporal models later,
-- you can evaluate closed-loop more realistically,
-- you can do train/val splits by trajectory (not by time-step leakage).
+where $o_t$ might include images, proprioception, force readings and a goal, and $a_t$ might be a velocity command, pose increment or gripper command.
 
-### 5) Normalize inputs and outputs
+A simple neural policy predicts one action. This is easy to train, but it can fail when there are multiple good actions for the same observation. For example, there may be several valid grasps for the same object. A deterministic policy trained with squared error may average these actions and produce a grasp that is not actually valid.
 
-For vector observations and actions, compute dataset statistics:
+One solution is a **mixture density network**. Instead of predicting one Gaussian action distribution, the model predicts a mixture:
 
 $$
-\mu_o,\sigma_o,\quad \mu_a,\sigma_a
+\pi_\theta(a \mid o) = \sum_{k=1}^{K} w_k(o)\,\mathcal{N}(a; \mu_k(o), \Sigma_k(o)).
 $$
 
-Train on normalized values:
+Each component can represent a different mode of behaviour. In a grasping task, one component might represent grasping from the left, another from the right and another from above. The model does not have to average these possibilities into a single action.
 
-$$
-\hat{o} = (o - \mu_o) / (\sigma_o + \epsilon), \quad \hat{a} = (a - \mu_a) / (\sigma_a + \epsilon)
-$$
-
-This stabilizes training and makes learning rates less fragile.
-
-For images:
-- normalize per-channel (mean/std),
-- consider resizing consistently,
-- keep intrinsics consistent if you change resolution.
-
-### 6) Choose a loss that matches your action type
-
-**Continuous deterministic BC (baseline):**
-$$
-\mathcal{L}(\theta)=\mathbb{E}\big[\|\pi_\theta(o)-a\|^2\big]
-$$
-
-**Continuous stochastic BC (often better):** predict $(\mu_\theta(o), \Sigma_\theta(o))$ and use Gaussian NLL:
-$$
-\mathcal{L}(\theta) = \mathbb{E}\Big[ \frac{1}{2}(a-\mu)^T\Sigma^{-1}(a-\mu) + \frac{1}{2}\log|\Sigma| \Big]
-$$
-
-Practical note: many implementations predict diagonal $\Sigma$ (per-action variance) to keep it stable.
-
-### 7) Evaluation: don’t trust offline loss alone
-
-Do three evaluations:
-
-1) **Offline** (sanity): MSE / NLL on held-out trajectories  
-2) **Open-loop rollout** (optional): feed recorded $o_t$ and compare predicted actions  
-3) **Closed-loop rollout** (required): run policy in sim/robot with safety clamps
-
-Closed-loop success is the only metric that matters.
-
-### 8) Deployment hygiene (minimum safety layer)
-
-Even for a “minimal” implementation:
-- clamp actions: $v,\omega$ limits or $\|\Delta \mathbf{x}\|$ limit
-- low-pass filter actions (avoid jitter)
-- stop on anomaly (NaNs, missing sensors, diverging pose)
-- watchdog: if no new observation for $\Delta t$, command zero action
-
-A typical safe executor:
-$$
-a_t = \text{clip}(\alpha \, a^r_t + (1-\alpha) \, a_{t-1})
-$$
-
-where $a^r_t$ is the raw action prediction.
-
----
-
-### Vision language action models
-
-A modern trend is to condition robot policies on language and images.
+A more recent alternative is a **diffusion policy**. A diffusion policy represents the action distribution by learning how to gradually denoise an initially random action or action sequence. Rather than outputting one action in a single forward pass, it starts with noise and iteratively refines it into an action that looks like one from the demonstration data.
 
 Conceptually:
+
 $$
-a_t = \pi_\theta(o_t, \text{instruction})
+\text{noise} \rightarrow \text{denoising model conditioned on observation} \rightarrow \text{action sequence}.
 $$
 
-This can be implemented by:
-- a vision encoder (image → features),
-- a language encoder (text → embedding),
-- a fusion module (cross-attention),
-- and an action head (predict actions).
+This is useful when the policy needs to represent complex, high-dimensional and multi-modal action distributions. For robotics, diffusion policies are often used to predict short **chunks** of future actions rather than only the next immediate action. This can make behaviour smoother and more temporally coherent.
 
-Why this is powerful:
-- language provides a compact task specification,
-- the model can reuse representations across tasks.
+The tradeoff is computational cost. A deterministic neural policy may require one forward pass. A diffusion policy usually requires multiple denoising steps, although faster samplers can reduce this cost.
 
-But: it does not remove the need for
-- calibration,
-- timing correctness,
-- and robust control execution.
+### Motion primitives
 
----
+Neural networks are flexible, but flexibility is not always what we need. Many robot behaviours have strong geometric and dynamical structure. Reaching, wiping, inserting, opening and handing over objects are not arbitrary input-output mappings; they are structured motions.
 
-## Summary: what you should be able to do after this week
+A **motion primitive** is a reusable movement pattern. Instead of learning a policy that maps every observation directly to every action, we learn or select parameters of a movement primitive. The primitive then generates the detailed trajectory.
 
-1. Explain the three main deep-learning perception task types (classification, regression, segmentation) and give a robotics example of each.
-2. Describe the architecture and typical use case of Masked R-CNN, SAM, and PointNet.
-3. Sketch a sensor-to-state pipeline for a manipulation or driving scenario.
-4. Implement behaviour cloning loss for continuous actions and explain what it optimizes.
-5. Explain covariate shift and name at least two mitigations (DAgger, residual learning, noise injection).
-6. Make a plan to deploy a learned policy safely.
+A classic example is the **Dynamic Movement Primitive** (DMP). A DMP represents a motion as a stable dynamical system plus a learned forcing term:
 
----
+$$
+\tau \dot{v} = \alpha_z(\beta_z(g-y)-v) + f(s),
+$$
 
-## Key Papers
+$$
+\tau \dot{y} = v.
+$$
 
-> Pomerleau, D. A. (1989). "ALVINN: An Autonomous Land Vehicle in a Neural Network." In *Advances in Neural Information Processing Systems (NeurIPS)*, vol. 1, pp. 305–313.
+Here $y$ is position, $v$ is velocity, $g$ is the goal, $\tau$ controls timing and $f(s)$ shapes the trajectory as a function of phase $s$. The important point is that the system has a built-in tendency to converge to the goal. This is an inductive bias: rather than learning arbitrary motion, we learn motion inside a stable movement structure.
 
-> Ijspeert, A. J., Nakanishi, J., Hoffmann, H., Pastor, P., and Schaal, S. (2013). "Dynamical Movement Primitives: Learning Attractor Models for Motor Behaviors." *Neural Computation*, 25(2), 328–373.
+DMPs are useful when we have demonstrations of a skill and want to reproduce it with changes in goal position or speed. For example, a reaching motion can be demonstrated once and then adapted to a new target by changing $g$.
 
-> Ross, S., Gordon, G., and Bagnell, D. (2011). "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning." In *Proceedings of AISTATS*, pp. 627–635.
+A **probabilistic movement primitive** extends this idea by representing a distribution over trajectories rather than a single trajectory. This is useful when demonstrations vary, or when the robot needs to reason about uncertainty in the motion. Instead of saying "this is the trajectory", a probabilistic primitive says "these are the likely trajectories".
 
-> He, K., Gkioxari, G., Dollár, P., and Girshick, R. (2017). "Mask R-CNN." In *IEEE International Conference on Computer Vision (ICCV)*.
+Motion primitives are less general than large neural policies, but they are often easier to interpret, easier to constrain and more data-efficient. They are a good choice when the task is a structured motion rather than open-ended decision making.
 
-> Kirillov, A., Mintun, E., Ravi, N., Mao, H., et al. (2023). "Segment Anything." In *IEEE International Conference on Computer Vision (ICCV)*.
+### Sequence models, Decision Transformers and vision-language-action models
+
+Some tasks cannot be solved well by looking only at the current observation. The robot may need to remember what it has already done, interpret a task instruction, or choose actions based on long-term progress.
+
+For these cases, we can model robot behaviour as a sequence:
+
+$$
+(o_1,a_1,o_2,a_2,\ldots,o_t) \rightarrow a_t.
+$$
+
+A **transformer** is a neural network architecture designed for sequence modelling. It uses attention to decide which parts of the previous sequence are relevant for predicting the next output. In robotics, this lets a policy condition on histories of observations, actions, goals and sometimes rewards.
+
+A **Decision Transformer** treats control as a sequence modelling problem. Instead of learning a value function or explicitly solving an optimal control problem, it predicts the next action conditioned on previous states, previous actions and a desired return. In simplified form:
+
+$$
+a_t = \pi_\theta(a_t \mid s_{1:t}, a_{1:t-1}, R_{1:t}),
+$$
+
+where $R$ represents a desired or remaining return. This is most naturally an offline learning method: it learns from a dataset of trajectories and then generates actions that resemble high-return behaviour.
+
+A **vision-language-action model** goes one step further by conditioning actions on visual observations and language instructions:
+
+$$
+a_t = \pi_\theta(a_t \mid \text{images}, \text{language instruction}, \text{robot state}).
+$$
+
+The appeal is that language provides a flexible task specification. Instead of training a separate policy for every task, the instruction can say what the robot should do: "pick up the red block", "put the spoon in the drawer", or "move the object next to the cup". Modern VLA systems connect robot action learning to the large-scale pretraining used in vision-language models.
+
+These models are powerful, but they are not magic. They usually need large datasets, careful action representations, strong safety layers and a reliable low-level controller. For this unit, the important point is not that transformers replace robotics structure. The important point is that they provide a model class for learning from large, diverse sequences of robot experience.
+
+### How to choose
+
+There is no universally best model class. The choice should follow the structure of the problem.
+
+| Model class | Best suited for | Main advantage | Main limitation |
+|---|---|---|---|
+| Deterministic neural policy | Simple continuous control from observations | Simple and fast | Averages multi-modal actions |
+| Mixture density policy | Multiple valid actions | Represents several modes | Must choose number of components |
+| Diffusion policy | Complex multi-modal action sequences | Flexible action distributions | Slower inference |
+| DMP | Smooth goal-directed motion | Stable and data-efficient | Limited to structured movements |
+| Probabilistic movement primitive | Variable demonstrations and uncertain trajectories | Distribution over motions | Less suited to open-ended decisions |
+| Decision Transformer | Offline trajectory datasets | Learns from long sequences | Needs good trajectory data |
+| VLA model | Language-conditioned robot tasks | Flexible task specification | Data- and compute-hungry |
+
+The practical guideline is simple: start with the simplest model that expresses the structure you need. Use a motion primitive when the task is naturally a movement. Use a probabilistic policy when there are multiple valid actions. Use a sequence or VLA model when history, task context or language is central. Use classical controllers wherever possible to stabilise the low-level behaviour.
+
+
+## Representations and latent variables
+
+So far, we have written policies as functions of observations:
+
+$$
+a_t = \pi_\theta(o_t).
+$$
+
+But raw observations can be very large. An image may contain hundreds of thousands of pixels. Most of those pixels are irrelevant to the current action.
+
+A common strategy is to first learn or compute a lower-dimensional representation:
+
+$$
+z_t = f_\phi(o_t),
+$$
+
+and then act using
+
+$$
+a_t = \pi_\theta(z_t).
+$$
+
+The variable $z_t$ is a **latent representation**. It is not directly measured; it is inferred from observations. It might encode object positions, contact state, task progress, visual features or other information useful for control.
+
+This connects back to state estimation. In recursive Bayes filtering, we maintain a belief over hidden state. In learned representation models, a neural network may learn a compact latent state from data.
+
+For sequential tasks, the current observation may not be enough. A single image may not reveal velocity, intent or whether an object was already touched. The policy may need history:
+
+$$
+a_t = \pi_\theta(o_{1:t}).
+$$
+
+This can be handled by explicitly estimating state, or by using a temporal model such as a recurrent neural network or transformer. Conceptually, both are trying to solve the same problem: summarise past observations into a useful internal state.
+
+### Inductive biases
+
+An **inductive bias** is an assumption that helps a learning system generalise beyond its training data.
+
+This definition is important. Learning from finite data is impossible without some bias. If many functions fit the data equally well, the learner needs a reason to prefer one over another. Linear regression has an inductive bias toward linear functions. A convolutional neural network has an inductive bias toward local spatial patterns. A Kalman filter has an inductive bias toward a particular probabilistic state-space model.
+
+Robotics is full of useful inductive biases:
+
+- rigid-body geometry,
+- kinematic constraints,
+- dynamics models,
+- locality in images,
+- temporal smoothness,
+- conservation laws,
+- stable controller structures,
+- collision constraints,
+- task structure,
+- symmetries and coordinate frames.
+
+These biases are not weaknesses. They are what make learning practical with limited robot data.
+
+A useful taxonomy is based on where the structure enters the learning system.
+
+#### Bias in the model
+
+We may build known physics into the model and learn only unknown parameters or residuals:
+
+$$
+x_{t+1} = f_{\text{physics}}(x_t,u_t;\theta) + f_{\text{residual}}(x_t,u_t).
+$$
+
+This is the most direct extension of system identification.
+
+#### Bias in the representation
+
+We may choose state variables that make the problem easier. For example, using object poses instead of raw pixels can make a manipulation policy much easier to learn. The perception system still has to estimate those poses, but the controller receives a structured input.
+
+#### Bias in the controller
+
+We may wrap learning inside a stabilising controller:
+
+$$
+u_t = u_{\text{base}}(x_t) + u_\theta(o_t),
+$$
+
+where $u_{\text{base}}$ is a PD, impedance, LQR, iLQR or MPC controller, and $u_\theta$ is a learned correction. This can improve safety and data efficiency.
+
+#### Bias in the data
+
+The dataset itself encodes assumptions. Demonstrations show which states matter. Domain randomisation shows which variations the policy should ignore. Carefully designed excitation trajectories reveal useful dynamics for system identification.
+
+The main message is that practical robot learning is not “just throw a neural network at it”. It is about choosing the right structure and learning the right missing piece.
+
+
+## Practical workflow for robot learning
+
+A practical robot learning project should start with the interface, not the neural network.
+
+* First, decide what the policy or model should take as input. Will it use raw images, object poses, proprioception, force readings, goal poses or language instructions? The input should contain the information needed to solve the task, but unnecessary complexity makes learning harder.
+
+* Second, decide what the model should output. For perception, this might be a class, mask or pose. For dynamics learning, it might be the next state or state difference. For imitation learning, it might be a velocity command, pose increment or gripper action.
+
+* Third, collect data with timestamps. Robotics data is temporal. Observations, actions and states must be aligned in time. A small timestamp error can make a good model look bad or train a controller that behaves poorly.
+
+* Fourth, choose a loss that matches the output. Use cross-entropy for discrete labels, squared error or likelihood losses for continuous outputs, and sequence losses when history matters.
+
+* Fifth, evaluate in closed loop. Offline loss is useful for debugging, but robot behaviour must be tested by rolling out the policy or controller. A policy with low mean squared error can still fail if small errors compound over time.
+
+* Finally, add safety constraints before deployment. Actions should be clipped, velocities and accelerations limited, workspaces bounded, sensors monitored and emergency stops available. A learned policy is still a controller connected to real hardware.
+
+
+## Big picture
+
+This week is the bridge between classical robotics and robot learning.
+
+In classical robotics, we often start with known models:
+
+$$
+z_t = h(x_t) + v_t,
+$$
+
+$$
+x_{t+1} = f(x_t,u_t),
+$$
+
+$$
+u_t = \pi(x_t).
+$$
+
+In robot learning, one or more of these functions may be learned from data:
+
+$$
+\hat{x}_t = h_\theta(o_t),
+$$
+
+$$
+\hat{x}_{t+1} = f_\theta(x_t,u_t),
+$$
+
+$$
+u_t = \pi_\theta(o_t).
+$$
+
+The core idea is simple: collect input-output examples, choose a model class, define a loss, fit the parameters and evaluate the result. The robotics difficulty is that learned models operate inside feedback loops, under uncertainty, with safety constraints and limited data.
+
+## Key papers and references
+
+> Pomerleau, D. A. (1989). "ALVINN: An Autonomous Land Vehicle in a Neural Network." In *Advances in Neural Information Processing Systems (NeurIPS)*, vol. 1, pp. 305-313.
+
+> Ross, S., Gordon, G., and Bagnell, D. (2011). "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning." In *Proceedings of AISTATS*, pp. 627-635.
+
+> Ijspeert, A. J., Nakanishi, J., Hoffmann, H., Pastor, P., and Schaal, S. (2013). "Dynamical Movement Primitives: Learning Attractor Models for Motor Behaviors." *Neural Computation*, 25(2), 328-373.
+
+> He, K., Gkioxari, G., Dollar, P., and Girshick, R. (2017). "Mask R-CNN." In *IEEE International Conference on Computer Vision (ICCV)*.
 
 > Qi, C. R., Su, H., Mo, K., and Guibas, L. J. (2017). "PointNet: Deep learning on point sets for 3D classification and segmentation." In *IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*.
 
-> Qi, C. R., Yi, L., Su, H., and Guibas, L. J. (2017). "PointNet++: Deep hierarchical feature learning on point sets in a metric space." In *Advances in Neural Information Processing Systems (NeurIPS)*.
+> Morrison, D., Corke, P., and Leitner, J. (2020). "Learning robust, real-time, reactive robotic grasping." *The International Journal of Robotics Research*, 39(2-3), 183-201.
 
-> Morrison, D., Corke, P., and Leitner, J. (2020). "Learning robust, real-time, reactive robotic grasping." *The International Journal of Robotics Research*, 39(2–3), 183–201.
+> Sutton, R. S. and Barto, A. G. (2018). *Reinforcement Learning: An Introduction* (2nd ed.). MIT Press.
 
-> Liu, Z., Tang, H., Amini, A., Yang, X., Mao, H., Rus, D., and Han, S. (2023). "BEVFusion: Multi-task multi-sensor fusion with unified bird's-eye view representation." In *IEEE International Conference on Robotics and Automation (ICRA)*.
+## Coming up next
 
----
+This week introduced learning as an extension of modelling, estimation and control. We saw how data can be used to learn perception models, dynamics models and imitation policies.
 
-# Coming up next
+Next week we look at what happens when the robot does not have demonstrations and instead learns by interacting with the world through rewards.
 
-Perception and learning are powerful, but they don’t replace structure.
-
-→ [Week 7: Kinematics](../week-06-kinematics/)
+→ [Week 9: Reinforcement Learning](../week-09-rl/)

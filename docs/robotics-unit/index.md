@@ -6,6 +6,8 @@ But first some acknowledgements. These notes are derived from slides and materia
 
 > **Dana Kulić**, **Juxi Leitner**, **Pamela Carreno-Medrano** and **Tan Chee Pin**.  
 
+and cleaned/messed up by multiple LLMs. Sady, most errors are likely attributable to me.
+
 Ok. Buckle up!
 
 ## All problems are optimal control problems

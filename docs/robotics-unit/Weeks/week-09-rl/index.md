@@ -1,313 +1,379 @@
 # Week 9: Reinforcement learning
 
-So far we have assumed we have a model of our robot, and used it to compute good controls. But what if we don't have that model? What if the cost function is too complex to write down? What if we just want the robot to *figure it out*?
+So far in the unit, we have mostly assumed that we can write down a useful model of the robot and its environment. We used that model to estimate state, plan trajectories and compute control actions. Reinforcement learning asks a different question: what if we do not have a usable model, or the model is a complex simulator that is difficult to analyse directly? What if the task objective is hard to express as a classical controller, but easy to score after the fact? What if we want the robot to improve through experience?
 
-This is the setting for **reinforcement learning (RL)**.
+This is the setting for **reinforcement learning** (RL). In RL, an agent interacts with an environment over time. At each step, it observes something about the world, chooses an action, receives a reward and updates its behaviour so that future rewards become larger. In robotics, the agent is usually the robot or the robot controller. The environment includes the robot body, the task, the objects, the terrain, the sensors and sometimes a simulator.
 
-Recall from the overview that we can think about our problem in terms of a reward instead of a cost:
+The core idea is simple:
 
-> an agent takes actions in an environment, receives rewards, and tries to maximise the total reward over time.
+> an agent learns a policy for choosing actions that maximise long-term reward.
 
-More formally, we define:
+This is closely related to the optimal control problems we have already seen. The language is different, but the structure is familiar: there is a state, an action, a dynamics model or transition process, and an objective over time.
 
-- **state** $s$: what the agent observes
-- **action** $a$: what the agent does
-- **reward** $r(s, a)$: signal from the environment
-- **policy** $\pi(a|s)$: the agent's strategy
+## Markov decision processes
 
-At each timestep the agent is in state $s_t$, takes action $a_t$, transitions to state $s_{t+1}$, and receives reward $r_t$. The goal is to find a policy $\pi$ that maximises the **expected return**:
+The standard mathematical model for reinforcement learning is a **Markov decision process**, or **MDP**. An MDP formalises sequential decision making under uncertainty when the agent can observe the full state of the system.
 
-$$
-G_t = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \dots = \sum_{k=0}^{\infty} \gamma^k r_{t+k}
-$$
-
-The **discount factor** $\gamma \in [0, 1)$ controls how much the agent cares about the future. A small $\gamma$ means focus on immediate rewards. A $\gamma$ close to 1 means plan for the long term.
-
-This is just the optimal control problem from week 1, written in different language.
-
-## Bellman equation
-
-The central idea in RL is the **value function**.
-
-The **state value function** $V^\pi(s)$ tells us: if I follow policy $\pi$ from state $s$, how much reward do I expect in total?
+An MDP is usually written as the tuple
 
 $$
-V^\pi(s) = \mathbb{E}_\pi \left[ G_t \mid s_t = s \right]
+\mathcal{M} = (\mathcal{S}, \mathcal{A}, P, R, \gamma),
 $$
 
-The clever observation is that this has a **recursive structure**. The value of a state is the immediate reward plus the discounted value of the next state:
+where $\mathcal{S}$ is the state space, $\mathcal{A}$ is the action space, $P(s' \mid s,a)$ is the transition probability, $R(s,a,s')$ is the reward function and $\gamma \in [0,1)$ is the discount factor.
+
+The **state** $s_t \in \mathcal{S}$ is assumed to contain all the information needed to predict the future, given the action. This is the **Markov property**:
 
 $$
-V^\pi(s) = \sum_a \pi(a|s) \sum_{s'} p(s'|s,a) \left[ r(s,a,s') + \gamma V^\pi(s') \right]
+P(s_{t+1} \mid s_t, a_t, s_{t-1}, a_{t-1}, \dots) = P(s_{t+1} \mid s_t, a_t).
 $$
 
-This is the **Bellman equation**. It says:
+In words, once we know the current state and action, the earlier history does not provide any extra information about the next state. This assumption is very strong, but it is what makes the problem mathematically tractable.
 
-> the value now = reward now + discounted value later
+A robot arm reaching task might define the state as the joint positions, joint velocities and object pose. The action might be a vector of joint torques or desired joint velocities. The transition model describes how the robot and object evolve after the action is applied. The reward might be positive when the gripper reaches the object, and negative for collisions, large torques or excessive time.
+
+A **policy** is the agent's decision rule. It maps states to actions, either deterministically,
+
+$$
+a = \pi(s),
+$$
+
+or stochastically,
+
+$$
+\pi(a \mid s) = P(a_t = a \mid s_t = s).
+$$
+
+The objective is to find a policy that maximises expected return. The return from time $t$ is
+
+$$
+G_t = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots
+= \sum_{k=0}^{\infty} \gamma^k r_{t+k}.
+$$
+
+The discount factor $\gamma$ determines how much the agent values future rewards. A small $\gamma$ makes the agent short-sighted. A value close to one makes it plan further ahead.
+
+## Partially observable Markov decision processes
+
+Many robotics problems are not fully observable. A mobile robot does not know its exact pose; it estimates it from odometry, lidar, cameras or GPS. A manipulation robot may not know the exact pose, friction or mass of the object it is holding. A human-robot interaction system may not know the human's intent, attention or workload.
+
+When the agent cannot directly observe the full state, the better model is a **partially observable Markov decision process**, or **POMDP**. A POMDP extends an MDP by adding observations and an observation model:
+
+$$
+\mathcal{P} = (\mathcal{S}, \mathcal{A}, P, R, \Omega, O, \gamma),
+$$
+
+where $\Omega$ is the observation space and
+
+$$
+O(o \mid s',a)
+$$
+
+is the probability of receiving observation $o$ after taking action $a$ and arriving in state $s'$.
+
+In a POMDP, the agent does not condition its policy directly on the true state, because the true state is hidden. Instead, it must act using its observation history,
+
+$$
+h_t = (o_0, a_0, o_1, a_1, \dots, o_t),
+$$
+
+or using a **belief state**. The belief state is a probability distribution over possible true states:
+
+$$
+b_t(s) = P(s_t = s \mid o_{1:t}, a_{0:t-1}).
+$$
+
+This connects directly to state estimation. The Kalman filter, EKF, particle filter and SLAM methods from earlier weeks can all be viewed as ways of maintaining a belief over hidden state. In a POMDP, the policy is then written as
+
+$$
+\pi(a \mid b),
+$$
+
+rather than $\pi(a \mid s)$.
+
+This is especially important in robotics because most real robot learning problems are at least partially observable. The robot almost never gets the true state directly. It receives sensor measurements, which are noisy, delayed, biased and incomplete. In practice, deep RL systems often deal with partial observability by stacking recent observations, using recurrent neural networks or feeding the policy an estimated state from a separate estimator.
+
+The distinction is useful:
+
+| Model | What the agent knows | Policy form | Robotics example |
+|---|---|---|---|
+| MDP | Full state $s_t$ | $\pi(a \mid s)$ | Simulated arm with perfect joint and object state |
+| POMDP | Observations or belief | $\pi(a \mid h)$ or $\pi(a \mid b)$ | Mobile robot using noisy sensors to navigate |
+
+MDPs are easier to solve and are the starting point for most RL theory. POMDPs are usually more realistic for robotics.
+
+## Value functions and the Bellman equation
+
+The central object in reinforcement learning is the **value function**. The value function tells us how good it is to be in a particular state, assuming we follow a particular policy.
+
+The **state-value function** for policy $\pi$ is
+
+$$
+V^\pi(s) = \mathbb{E}_\pi \left[ G_t \mid s_t = s \right].
+$$
+
+This is the expected return starting in state $s$ and following $\pi$ thereafter.
+
+The key observation is that value has a recursive structure. The value of a state is the immediate reward plus the discounted value of the next state:
+
+$$
+V^\pi(s) = \sum_a \pi(a \mid s) \sum_{s'} P(s' \mid s,a)
+\left[ R(s,a,s') + \gamma V^\pi(s') \right].
+$$
+
+This is the **Bellman equation**. It says that long-horizon decision making can be decomposed into a one-step reward plus the value of what comes next.
 
 > Bellman, R. (1957). *Dynamic Programming*. Princeton University Press.
 
-We can also define the **action-value function** $Q^\pi(s, a)$, which asks: what is the expected return if I am in state $s$, take action $a$, and then follow policy $\pi$ afterwards?
+We can also define the **action-value function**:
 
 $$
-Q^\pi(s,a) = \mathbb{E}_\pi \left[ G_t \mid s_t = s, a_t = a \right]
+Q^\pi(s,a) = \mathbb{E}_\pi \left[ G_t \mid s_t = s, a_t = a \right].
 $$
 
-The relationship between $V$ and $Q$ is simple:
+This asks a slightly different question: if we are in state $s$, take action $a$, and then follow policy $\pi$, how much return should we expect?
+
+The relationship between $V$ and $Q$ is
 
 $$
-V^\pi(s) = \sum_a \pi(a|s) Q^\pi(s,a)
+V^\pi(s) = \sum_a \pi(a \mid s) Q^\pi(s,a).
 $$
 
-The **optimal value function** $V^*(s) = \max_\pi V^\pi(s)$ satisfies the **Bellman optimality equation**:
+The optimal value function is
 
 $$
-V^*(s) = \max_a \sum_{s'} p(s'|s,a) \left[ r(s,a,s') + \gamma V^*(s') \right]
+V^*(s) = \max_\pi V^\pi(s),
 $$
 
-If we knew $V^*$, we could recover the optimal policy greedily: always pick the action that maximises the right-hand side. The entire challenge of RL is computing these quantities without full knowledge of the environment.
-
-## Temporal difference learning
-
-Here is the first practical problem.
-
-To compute $V^\pi(s)$ exactly, we would need to know all transitions $p(s'|s,a)$. In practice, we often don't. Instead we can **learn from experience**.
-
-**Temporal difference (TD) learning** updates our estimate of $V$ using real transitions, without waiting to observe the full return.
-
-The core idea: after observing a transition $(s_t, r_t, s_{t+1})$, we update:
+and it satisfies the **Bellman optimality equation**:
 
 $$
-V(s_t) \leftarrow V(s_t) + \alpha \left[ r_t + \gamma V(s_{t+1}) - V(s_t) \right]
+V^*(s) = \max_a \sum_{s'} P(s' \mid s,a)
+\left[ R(s,a,s') + \gamma V^*(s') \right].
 $$
 
-The term in brackets is called the **TD error**:
+If we know $V^*$, we can recover an optimal policy by choosing the action that maximises the right-hand side. Much of RL is about estimating $V^*$, $Q^*$ or the policy directly, often without knowing the transition model.
+
+## Temporal-difference learning
+
+The Bellman equation assumes we can reason over transition probabilities. In practice, we often do not know $P(s' \mid s,a)$. Instead, we learn from experience.
+
+**Temporal-difference learning** updates a value estimate from real transitions. After observing a transition $(s_t, r_t, s_{t+1})$, we update
 
 $$
-\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)
+V(s_t) \leftarrow V(s_t) + \alpha
+\left[ r_t + \gamma V(s_{t+1}) - V(s_t) \right],
 $$
 
-It measures how surprised we are. If $\delta_t > 0$, we got more reward than expected, so we increase our estimate of $V(s_t)$. If $\delta_t < 0$, we are disappointed, and decrease it.
+where $\alpha$ is the learning rate.
 
-The key point is **bootstrapping**: we update an estimate using another estimate. We don't wait to see the full trajectory — we update after every single step.
-
-This is what makes TD learning fast and practical.
-
-> Sutton, R. S. (1988). "Learning to Predict by the Methods of Temporal Differences." *Machine Learning*, 3(1), 9–44.
-
-## Value iteration
-
-Now suppose we *do* have a model (we know transitions and rewards). Can we solve for $V^*$ directly?
-
-Yes — using **value iteration**.
-
-The algorithm is simple. Start with an arbitrary estimate $V_0$, and repeatedly apply the Bellman optimality equation:
+The term in brackets is the **TD error**:
 
 $$
-V_{k+1}(s) = \max_a \sum_{s'} p(s'|s,a) \left[ r(s,a,s') + \gamma V_k(s') \right]
+\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t).
 $$
 
-We keep applying this update until $V$ stops changing:
+The TD error measures surprise. If $\delta_t$ is positive, the outcome was better than expected and the value of $s_t$ is increased. If it is negative, the outcome was worse than expected and the value is decreased.
+
+The important feature of TD learning is **bootstrapping**: we update one estimate using another estimate. We do not wait until the end of the whole trajectory. This makes learning far more practical for long-horizon problems.
+
+> Sutton, R. S. (1988). "Learning to Predict by the Methods of Temporal Differences." *Machine Learning*, 3(1), 9-44.
+
+## Dynamic programming: value iteration and policy iteration
+
+If the model is known and the state and action spaces are finite, we can solve the MDP using dynamic programming.
+
+**Value iteration** repeatedly applies the Bellman optimality update:
 
 $$
-\| V_{k+1} - V_k \|_\infty < \epsilon
+V_{k+1}(s) = \max_a \sum_{s'} P(s' \mid s,a)
+\left[ R(s,a,s') + \gamma V_k(s') \right].
 $$
 
-It can be shown that this **converges** to $V^*$ for any starting point. Once we have $V^*$, the optimal policy is:
+Starting from any initial value function, this process converges to $V^*$ under standard assumptions. Once the values have converged, the optimal policy is
 
 $$
-\pi^*(s) = \arg\max_a \sum_{s'} p(s'|s,a) \left[ r(s,a,s') + \gamma V^*(s') \right]
+\pi^*(s) = \arg\max_a \sum_{s'} P(s' \mid s,a)
+\left[ R(s,a,s') + \gamma V^*(s') \right].
 $$
 
-Value iteration is clean and works, but requires:
+Value iteration is conceptually clean, but it requires a known model and a discrete state-action space. This limits its direct use on real robots, where states and actions are often continuous and high-dimensional.
 
-- a finite, discrete state and action space
-- knowing the model $p(s'|s,a)$
-
-For most real robots, neither is true.
-
-## Policy iteration
-
-**Policy iteration** is an alternative dynamic programming method. Instead of iterating on values directly, we alternate between two steps:
-
-1. **Policy evaluation**: given the current policy $\pi$, compute $V^\pi$ by solving the Bellman equations (or iterating until convergence)
-
-2. **Policy improvement**: update the policy greedily with respect to $V^\pi$:
+**Policy iteration** takes a different approach. It alternates between policy evaluation and policy improvement. In the evaluation step, we compute the value function $V^\pi$ for the current policy. In the improvement step, we update the policy greedily with respect to that value function:
 
 $$
-\pi'(s) = \arg\max_a \sum_{s'} p(s'|s,a) \left[ r(s,a,s') + \gamma V^\pi(s') \right]
+\pi'(s) = \arg\max_a \sum_{s'} P(s' \mid s,a)
+\left[ R(s,a,s') + \gamma V^\pi(s') \right].
 $$
 
-Repeat until the policy stops changing.
+Each improvement step produces a policy that is at least as good as the previous one. Policy iteration often needs fewer outer iterations than value iteration, but the evaluation step can be expensive. Practical variants often use approximate or truncated evaluation.
 
-It can be shown that each improvement step is guaranteed to produce a policy at least as good as the current one, and the process converges to $\pi^*$.
-
-Policy iteration often converges in fewer iterations than value iteration, but each evaluation step can be expensive. In practice, **truncated policy iteration** cuts this short and is often faster overall.
-
-Both value iteration and policy iteration are examples of **dynamic programming**: they break the global optimisation problem into smaller subproblems and solve them recursively. They require a model and work over discrete spaces, which limits their direct applicability to real robots.
+Both methods are important because they show the structure of optimal decision making. Even when we cannot use them directly, many modern RL algorithms are built from the same Bellman recursion.
 
 ## Q-learning
 
-Now we drop the model entirely.
+Q-learning removes the need for a transition model. It directly learns the optimal action-value function $Q^*(s,a)$ from sampled experience.
 
-**Q-learning** is a **model-free**, **off-policy** algorithm that directly learns the optimal action-value function $Q^*(s,a)$ from experience.
-
-The update rule is:
+After observing a transition $(s_t, a_t, r_t, s_{t+1})$, Q-learning performs the update
 
 $$
-Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \left[ r_t + \gamma \max_{a'} Q(s_{t+1}, a') - Q(s_t, a_t) \right]
+Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha
+\left[ r_t + \gamma \max_{a'} Q(s_{t+1}, a') - Q(s_t, a_t) \right].
 $$
 
-This looks just like TD learning, but now we are updating $Q$ instead of $V$, and we take the max over next actions instead of following the current policy.
+This is a temporal-difference update for action values. The target uses the best estimated next action, regardless of the action the current behaviour policy actually takes. For this reason, Q-learning is called **off-policy**: it can learn the optimal policy while following a different, exploratory policy.
 
-**Off-policy** means we can learn about the optimal policy while following a different (e.g. exploratory) policy. This is useful because we need to explore the environment to gather good data, but we also want to learn about what would happen if we behaved optimally.
+A common exploration strategy is **$\epsilon$-greedy**. With probability $\epsilon$, the agent chooses a random action. With probability $1-\epsilon$, it chooses the action with the highest current $Q$ value. Early in training, $\epsilon$ is usually large to encourage exploration. Later, it is reduced so that the agent exploits what it has learned.
 
-A common exploration strategy is **$\epsilon$-greedy**: with probability $\epsilon$ take a random action, otherwise take the greedy action $\arg\max_a Q(s,a)$. Over time, we decay $\epsilon$ as the estimates improve.
-
-Under mild conditions, Q-learning is guaranteed to converge to $Q^*$ for finite state and action spaces.
-
-> Watkins, C. J. C. H. and Dayan, P. (1992). "Q-learning." *Machine Learning*, 8(3–4), 279–292.
-
-The recovered optimal policy is simply:
+Under suitable conditions, tabular Q-learning converges to $Q^*$ for finite MDPs. The optimal policy is then
 
 $$
-\pi^*(s) = \arg\max_a Q^*(s,a)
+\pi^*(s) = \arg\max_a Q^*(s,a).
 $$
 
-No model needed. No planning needed. Just experience.
+> Watkins, C. J. C. H. and Dayan, P. (1992). "Q-learning." *Machine Learning*, 8(3-4), 279-292.
 
-## Deep RL
+Q-learning is powerful because it does not need an explicit model. Its limitation is that the tabular version requires us to store a value for every state-action pair, which is impossible for most robotics problems.
 
-Q-learning works when we can store $Q(s,a)$ in a table. But real robots have high-dimensional, continuous state spaces — camera images, joint angles, laser scans. We can't enumerate every state.
+## Deep reinforcement learning
 
-The solution: **approximate $Q(s,a)$ with a neural network**.
+Real robots have large or continuous state spaces. A robot may observe images, lidar scans, joint angles, velocities, contact forces and object poses. It is not possible to enumerate every state. Deep RL replaces tables with function approximators, usually neural networks.
 
-$$
-Q(s,a) \approx Q(s,a;\theta)
-$$
+### Deep Q-networks
 
-where $\theta$ are learnable parameters. This is **Deep Q-Networks (DQN)**, introduced by DeepMind in 2013.
-
-> Mnih, V., Kavukcuoglu, K., Silver, D., et al. (2015). "Human-level control through deep reinforcement learning." *Nature*, 518(7540), 529–533.
-
-The training objective is to minimise the **TD loss**:
+A **Deep Q-Network** approximates the action-value function with a neural network:
 
 $$
-\mathcal{L}(\theta) = \mathbb{E} \left[ \left( r + \gamma \max_{a'} Q(s', a'; \theta^-) - Q(s, a; \theta) \right)^2 \right]
+Q(s,a) \approx Q(s,a;\theta),
 $$
 
-Two key tricks make this stable:
+where $\theta$ are learnable parameters.
 
-- **Experience replay**: store past transitions $(s, a, r, s')$ in a buffer and sample mini-batches randomly. This breaks temporal correlations.
-- **Target network**: a separate copy $\theta^-$ that is updated slowly. This prevents chasing a moving target.
-
-DQN can handle high-dimensional inputs like raw pixels, but is limited to discrete action spaces.
-
-For **continuous actions** we use **actor-critic** methods instead. These maintain two networks:
-
-- **Actor** $\pi(a|s;\phi)$: the policy — maps states to actions
-- **Critic** $V(s;\theta)$ or $Q(s,a;\theta)$: evaluates how good actions are
-
-The critic provides a learning signal for the actor. The actor tries to improve based on that signal. Together they can handle continuous action spaces like joint velocities or wheel speeds.
-
-This family of algorithms — **A3C**, **SAC**, **TD3** — forms the backbone of modern deep RL for robotics.
-
-> Mnih, V., Badia, A. P., Mirza, M., et al. (2016). "Asynchronous Methods for Deep Reinforcement Learning." In *Proceedings of ICML*, pp. 1928–1937.
-
-> Haarnoja, T., Zhou, A., Abbeel, P., and Levine, S. (2018). "Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor." In *Proceedings of ICML*, pp. 1861–1870.
-
-> Fujimoto, S., van Hoof, H., and Meger, D. (2018). "Addressing Function Approximation Error in Actor-Critic Methods." In *Proceedings of ICML*, pp. 1587–1596.
-
-## PPO
-
-**Proximal Policy Optimisation (PPO)** is currently one of the most widely used deep RL algorithms, especially for robotics and continuous control.
-
-The core problem it solves: if we update our policy too aggressively, we can accidentally make it much worse, and it's hard to recover. We want to take the **largest update we can while staying close to the current policy**.
-
-PPO achieves this by clipping the policy update. Define the **probability ratio**:
+The network is trained by minimising a squared TD error:
 
 $$
-r_t(\phi) = \frac{\pi(a_t|s_t;\phi)}{\pi(a_t|s_t;\phi_\text{old})}
+\mathcal{L}(\theta) = \mathbb{E}
+\left[
+\left(
+ r + \gamma \max_{a'} Q(s', a'; \theta^-) - Q(s,a;\theta)
+\right)^2
+\right].
 $$
 
-The clipped surrogate objective is:
+Here $\theta^-$ denotes a **target network**, a delayed copy of the Q-network used to stabilise learning. DQN also uses **experience replay**, where transitions are stored in a buffer and sampled randomly in mini-batches. This reduces temporal correlation in the training data and makes neural network optimisation more stable.
+
+DQN was an important step in deep RL because it showed that a neural network could learn useful control policies from high-dimensional inputs such as pixels. However, standard DQN is mainly suited to discrete action spaces, which limits its direct applicability to many robot control problems.
+
+> Mnih, V., Kavukcuoglu, K., Silver, D., et al. (2015). "Human-level control through deep reinforcement learning." *Nature*, 518(7540), 529-533.
+
+### Actor-critic methods
+
+For continuous control, robotics often uses **actor-critic** methods. These methods maintain two learned objects. The **actor** is the policy, usually written as
 
 $$
-\mathcal{L}^\text{CLIP}(\phi) = \mathbb{E}_t \left[ \min\left( r_t(\phi) \hat{A}_t, \; \text{clip}(r_t(\phi), 1-\epsilon, 1+\epsilon) \hat{A}_t \right) \right]
+\pi(a \mid s;\phi),
 $$
 
-where $\hat{A}_t$ is the **advantage**: how much better was this action compared to what we expected?
+and the **critic** estimates either a value function $V(s;\theta)$ or an action-value function $Q(s,a;\theta)$.
+
+The critic evaluates how good the actor's actions are. The actor is then updated to choose actions that the critic rates more highly. This separation is useful because continuous actions cannot be handled by a simple max over a finite action table.
+
+Modern actor-critic algorithms such as A3C, TD3 and SAC are widely used for simulated locomotion, manipulation and continuous control.
+
+> Mnih, V., Badia, A. P., Mirza, M., et al. (2016). "Asynchronous Methods for Deep Reinforcement Learning." In *Proceedings of ICML*, pp. 1928-1937.
+
+> Fujimoto, S., van Hoof, H., and Meger, D. (2018). "Addressing Function Approximation Error in Actor-Critic Methods." In *Proceedings of ICML*, pp. 1587-1596.
+
+> Haarnoja, T., Zhou, A., Abbeel, P., and Levine, S. (2018). "Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor." In *Proceedings of ICML*, pp. 1861-1870.
+
+### Proximal policy optimisation
+
+**Proximal Policy Optimisation**, or **PPO**, is one of the most widely used policy-gradient methods in deep RL. It is popular because it is relatively simple, stable and effective across a broad range of tasks.
+
+The problem PPO addresses is that policy updates can be destructive. If we change the policy too aggressively, performance can collapse and recovery may be difficult. PPO therefore tries to improve the policy while keeping the new policy close to the old one.
+
+Define the probability ratio
 
 $$
-\hat{A}_t = Q(s_t, a_t) - V(s_t)
+r_t(\phi) = \frac{\pi(a_t \mid s_t;\phi)}{\pi(a_t \mid s_t;\phi_\text{old})}.
 $$
 
-The clip prevents the ratio from straying too far from 1, which enforces a **trust region** around the current policy without needing to solve a constrained optimisation problem.
+PPO optimises the clipped surrogate objective
 
-Why is PPO popular?
+$$
+\mathcal{L}^{\text{CLIP}}(\phi) = \mathbb{E}_t
+\left[
+\min\left(
+ r_t(\phi) \hat{A}_t,
+ \text{clip}(r_t(\phi), 1-\epsilon, 1+\epsilon) \hat{A}_t
+\right)
+\right],
+$$
 
-- Simple to implement
-- Relatively stable to train
-- Works well across a wide range of tasks
-- Scales to large networks and parallel environments
+where $\hat{A}_t$ is an estimate of the **advantage**:
 
-PPO is used to train locomotion policies for legged robots, manipulation policies for robot arms, and was used to train the OpenAI Dota and robotics hand policies. If you want a default starting point for a robotics RL problem, PPO is a sensible choice.
+$$
+\hat{A}_t = Q(s_t,a_t) - V(s_t).
+$$
+
+The advantage measures whether an action was better or worse than expected in that state. The clipping term prevents the new policy from moving too far away from the old policy in one update. This acts like a simple trust region.
+
+PPO is often used as a default starting point for robotics RL, especially in simulation. It has been used for locomotion, manipulation and large-scale policy training. It is not always the most sample-efficient algorithm, but it is robust enough to be useful in many settings.
 
 > Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. (2017). "Proximal Policy Optimization Algorithms." arXiv preprint arXiv:1707.06347.
 
-## The promise and the pain.
+## RL in robotics: promise and pain
 
-So what is reinforcement learning actually good for?
+The appeal of reinforcement learning in robotics is clear. Given a simulator and a reward function, a robot can in principle learn behaviour without a hand-designed controller, without an analytic dynamics model and without a carefully engineered planner.
 
-The promise is compelling:
+This has led to impressive results in games, legged and humanoid locomotion, dexterous manipulation and some real-world robot systems. However, RL is not a magic replacement for modelling and control. It introduces its own practical difficulties.
 
-> given a simulator and a reward function, a robot can learn to solve complex tasks — with no hand-designed controller, no model, no demonstrations.
+**Reward engineering** is often the first problem. The algorithm optimises the reward that is specified, not the task we intended. If the reward has loopholes, the agent may exploit them. A robot trained to move quickly may learn unsafe motions unless safety is explicitly encoded. A robot trained to reach an object may learn to knock it over if the reward only cares about end-effector distance.
 
-And there are genuine success stories. RL has produced impressive locomotion policies for legged robots, dexterous manipulation in simulation, and game-playing agents that exceed human performance. We have seen policies learned entirely in simulation deployed on real hardware.
+**Sample efficiency** is a second major issue. RL often requires millions or billions of environment interactions. On real hardware, this is slow, expensive and can damage the robot. This is why most robotics RL is trained in simulation first.
 
-But there is a long list of practical difficulties.
+**Sim-to-real transfer** is then the next obstacle. Simulators differ from the real world in friction, contact, delays, compliance, sensor noise and unmodelled dynamics. A policy that works beautifully in simulation can fail immediately on real hardware. Domain randomisation addresses this by training across a distribution of simulated worlds, rather than one fixed simulator setting. The goal is to learn a policy that is robust to modelling error.
 
-**Reward engineering is hard.** The algorithm will optimise whatever you specify, exactly. If your reward is slightly wrong, you will get surprising and often unhelpful behaviour. The robot will find every loophole you did not anticipate. Getting a reward function right for a real task is much harder than it sounds.
+**Long-horizon credit assignment** is also difficult. If a task fails after hundreds of steps, it is hard to know which earlier action caused the failure. Sparse rewards make this worse because the agent receives little feedback about intermediate progress.
 
-**Sample inefficiency.** Learning from scratch requires millions of environment interactions. In the real world, each interaction takes time and causes wear. Even in simulation, this can take days of compute. Model-based RL and offline RL try to address this, but it remains a significant bottleneck.
+**Stability and reproducibility** remain persistent problems. Deep RL can be sensitive to hyperparameters, random seeds, network architecture and implementation details. Two implementations of the same algorithm may behave differently.
 
-**Sim-to-real transfer.** We usually train in simulation because it is cheap and safe. But the real world is different from the simulator in subtle ways — surface friction, sensor noise, actuation delays, unmodelled dynamics. Policies trained in simulation often fail when deployed on the real robot. **Domain randomisation** (training across many simulated conditions) and **domain adaptation** (aligning simulation and reality) are active research areas.
+For these reasons, RL is best viewed as one tool in the robotics toolbox. It is especially useful when the task is hard to model or hand-design, but easy to simulate and score. It is less attractive when safety constraints are strict, data are expensive or a reliable model-based controller already exists.
 
-**Credit assignment over long horizons.** If a robot fails after 500 steps, which action was the mistake? Assigning blame over long sequences is hard, and rewards that arrive late are difficult to learn from.
+## Big picture
 
-**Stability and reproducibility.** Deep RL is notoriously sensitive to hyperparameters, random seeds, and implementation details. A policy that works in one environment may completely fail in a slightly different one.
+Reinforcement learning reframes control as learning from interaction. Instead of deriving a controller directly from a known model, we define a reward and allow the agent to improve through trial and error.
 
-None of this means RL is not useful. It means RL is a powerful but sharp tool. Used carefully — with a good simulator, a well-designed reward, and realistic transfer conditions — it can solve problems that classical control cannot.
+The MDP provides the clean theoretical model: the agent observes the state, acts, receives reward and transitions to a new state. The POMDP is the more realistic robotics model: the true state is hidden, sensors are imperfect and the robot must act under uncertainty.
 
-> The gap between "it works in simulation" and "it works on the robot" is the central challenge of applying RL to real systems.
+Bellman equations explain the recursive structure of optimal decision making. Temporal-difference learning shows how to learn values from experience. Q-learning learns action values without a model. Deep RL scales these ideas to high-dimensional observations and continuous control, using neural networks and actor-critic methods.
 
-The rest of the field is slowly closing that gap.
-
----
+The central robotics lesson is that RL does not remove the need for good engineering. A successful robot learning system still needs sensible state representations, safe exploration, good simulation, careful reward design, robust estimation and attention to transfer from simulation to reality.
 
 ## Key Papers
 
 > Bellman, R. (1957). *Dynamic Programming*. Princeton University Press.
 
-> Sutton, R. S. (1988). "Learning to Predict by the Methods of Temporal Differences." *Machine Learning*, 3(1), 9–44.
+> Sutton, R. S. (1988). "Learning to Predict by the Methods of Temporal Differences." *Machine Learning*, 3(1), 9-44.
 
-> Watkins, C. J. C. H. and Dayan, P. (1992). "Q-learning." *Machine Learning*, 8(3–4), 279–292.
+> Watkins, C. J. C. H. and Dayan, P. (1992). "Q-learning." *Machine Learning*, 8(3-4), 279-292.
 
-> Mnih, V., Kavukcuoglu, K., Silver, D., et al. (2015). "Human-level control through deep reinforcement learning." *Nature*, 518(7540), 529–533.
+> Mnih, V., Kavukcuoglu, K., Silver, D., et al. (2015). "Human-level control through deep reinforcement learning." *Nature*, 518(7540), 529-533.
+
+> Mnih, V., Badia, A. P., Mirza, M., et al. (2016). "Asynchronous Methods for Deep Reinforcement Learning." In *Proceedings of ICML*, pp. 1928-1937.
 
 > Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. (2017). "Proximal Policy Optimization Algorithms." arXiv preprint arXiv:1707.06347.
 
-> Haarnoja, T., Zhou, A., Abbeel, P., and Levine, S. (2018). "Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor." In *Proceedings of ICML*, pp. 1861–1870.
+> Fujimoto, S., van Hoof, H., and Meger, D. (2018). "Addressing Function Approximation Error in Actor-Critic Methods." In *Proceedings of ICML*, pp. 1587-1596.
+
+> Haarnoja, T., Zhou, A., Abbeel, P., and Levine, S. (2018). "Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor." In *Proceedings of ICML*, pp. 1861-1870.
 
 > Sutton, R. S. and Barto, A. G. (2018). *Reinforcement Learning: An Introduction* (2nd ed.). MIT Press.
 
----
+## Coming up next
 
-# Coming up next
+We have now covered the major pillars of robot intelligence: representation, modelling, control, estimation, perception and learning.
 
-We have now covered the major pillars of robot intelligence: representation, modelling, control, estimation, perception, and learning.
-
-Next, we ask: how do all of these ideas change when a human is in the loop?
+Next, we ask how all of these ideas change when a human is in the loop.
 
 → [Week 10: Human Robot Interaction](../week-10-hri/)
-
