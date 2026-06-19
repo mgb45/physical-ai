@@ -1,10 +1,10 @@
-# Week 8: Robot perception and learning
+# Chapter 8: Robot perception and learning
 
 So far, we have built most of the classical robotics stack. We have represented robot state, written down kinematic and dynamic models, designed controllers, estimated state with recursive Bayes filters, built maps, planned paths, and described the kinematics and dynamics of manipulators.
 
 A common theme has been that we first write down a model, and then use that model to estimate, plan, or control. In system identification, we already saw the first step toward learning: the structure of the model was known, but some parameters were unknown, so we estimated them from data.
 
-This week extends that idea.
+This chapter extends that idea.
 
 In many robotics problems, the model is not fully known, the state is not directly available, and the controller is difficult to design by hand. A camera gives pixels, not object poses. A depth camera gives points, not a grasp strategy. A demonstration gives examples of behaviour, not the rule that generated them. A real robot behaves differently from its nominal model because of friction, backlash, compliance, cable forces, wear, payload changes and contact.
 
@@ -12,7 +12,7 @@ In many robotics problems, the model is not fully known, the state is not direct
 
 The aim is not to replace modelling. The aim is to use data where modelling is difficult, while still using structure wherever we have it.
 
-A useful principle for the rest of the week is:
+A useful principle for the rest of the chapter is:
 
 > model what you know, and learn what you cannot model.
 
@@ -64,7 +64,7 @@ Learning is useful when an important mapping is hard to write down by hand but e
 
 A few examples make this concrete.
 
-A camera image contains information about objects, but writing an analytic equation from pixels to object identity is almost impossible. Instead, we collect labelled images and learn a perception model. Modern convolutional and transformer-based perception systems are examples of this idea, but for this week the important point is the input-output formulation rather than the architecture details.
+A camera image contains information about objects, but writing an analytic equation from pixels to object identity is almost impossible. Instead, we collect labelled images and learn a perception model. Modern convolutional and transformer-based perception systems are examples of this idea, but for this chapter the important point is the input-output formulation rather than the architecture details.
 
 A robot arm has known rigid-body dynamics, but the exact friction, payload, cable forces or contact effects may be unknown. Instead of deriving every missing effect from first principles, we can learn a residual (additive) dynamics model from measured motion data.
 
@@ -76,17 +76,17 @@ This gives three important learning problems in robotics:
 2. **Dynamics learning:** learn how the system changes when actions are applied.
 3. **Imitation learning:** learn a policy from demonstrations.
 
-Reinforcement learning is another important case, where the robot learns from reward through trial and error. We will cover that in detail next week. This week we only need the high-level idea that reinforcement learning learns behaviour from interaction, whereas imitation learning learns behaviour from examples provided by an expert.
+Reinforcement learning is another important case, where the robot learns from reward through trial and error. We will cover that in detail next chapter. This chapter we only need the high-level idea that reinforcement learning learns behaviour from interaction, whereas imitation learning learns behaviour from examples provided by an expert.
 
 ## Perception as learned state estimation
 
-In Week 2, we described sensors using measurement models such as
+In Chapter 2, we described sensors using measurement models such as
 
 $$
 z_t = h(x_t) + v_t,
 $$
 
-where $x_t$ is the underlying state, $z_t$ is the measurement and $v_t$ is noise. In Week 4, we used recursive Bayes filtering to estimate state from measurements:
+where $x_t$ is the underlying state, $z_t$ is the measurement and $v_t$ is noise. In Chapter 4, we used recursive Bayes filtering to estimate state from measurements:
 
 $$
 p(x_t \mid z_{1:t}, u_{1:t}).
@@ -212,7 +212,7 @@ This is a useful way to think about deep learning in robotics. A neural network 
 
 The first major robot learning problem is dynamics learning.
 
-In earlier weeks, we wrote robot models such as
+In earlier chapters, we wrote robot models such as
 
 $$
 x_{t+1} = f(x_t, u_t)
@@ -317,7 +317,7 @@ This is one of the cleanest bridges from system identification to robot learning
 
 ## Imitation learning
 
-The second major robot learning problem this week is imitation learning.
+The second major robot learning problem this chapter is imitation learning.
 
 In imitation learning, we do not start with a reward function. Instead, we start with demonstrations. An expert shows the robot what to do, and the robot learns to imitate the expert.
 
@@ -707,7 +707,7 @@ A practical robot learning project should start with the interface, not the neur
 
 ## Big picture
 
-This week is the bridge between classical robotics and robot learning.
+This chapter is the bridge between classical robotics and robot learning.
 
 In classical robotics, we often start with known models:
 
@@ -798,8 +798,8 @@ The core idea is simple: collect input-output examples, choose a model class, de
 
 ## Coming up next
 
-This week introduced learning as an extension of modelling, estimation and control. We saw how data can be used to learn perception models, dynamics models and imitation policies.
+This chapter introduced learning as an extension of modelling, estimation and control. We saw how data can be used to learn perception models, dynamics models and imitation policies.
 
-Next week we look at what happens when the robot does not have demonstrations and instead learns by interacting with the world through rewards.
+Next chapter we look at what happens when the robot does not have demonstrations and instead learns by interacting with the world through rewards.
 
-→ [Week 9: Reinforcement Learning](../week-09-rl/index.md)
+→ [Chapter 9: Reinforcement Learning](../chapter-09-rl/index.md)

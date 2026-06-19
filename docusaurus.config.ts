@@ -9,7 +9,7 @@ import rehypeKatex from 'rehype-katex';
 const config: Config = {
   title: 'Intelligent Robotics',
   tagline: 'The Theory',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/icon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -74,20 +74,20 @@ const config: Config = {
     navbar: {
       title: 'Intelligent Robotics',
       logo: {
-        alt: 'Robotics Course Logo',
-        src: 'img/icon.png',
+        alt: 'Robotics =Logo',
+        src: 'img/icon.svg',
       },
       items: [
         {
           type: 'docSidebar',
           sidebarId: 'roboticsSidebar',
           position: 'left',
-          label: 'Course Content',
+          label: 'Draft textbook',
         },
       ],
     },
     footer: {
-      copyright: `Copyright © ${new Date().getFullYear()} Michael Burke.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Michael Burke. These notes form part of an ongoing textbook project. Permission is granted for personal educational use.`,
     },
     prism: {
       theme: prismThemes.github,

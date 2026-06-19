@@ -1,6 +1,6 @@
-# Week 2: Modelling mobile robots
+# Chapter 2: Modelling mobile robots
 
-So far, we have thought about how to represent a robot. This week, we move from representation to modelling: how that representation evolves over time, and how it changes in response to commands or actions we send to the robot.
+So far, we have thought about how to represent a robot. This chapter, we move from representation to modelling: how that representation evolves over time, and how it changes in response to commands or actions we send to the robot.
 
 A useful starting point is to think carefully about how robots can move. This is often more constrained than the state representation we use to describe them.
 
@@ -46,7 +46,7 @@ $$
 \dot{x}(t) = f(x(t), u(t)).
 $$
 
-This is a more concrete version of the modelling idea introduced in Week 1.
+This is a more concrete version of the modelling idea introduced in Chapter 1.
 
 A motion model usually includes the state $x$, such as position, orientation, and velocity; the control input $u$, such as motor commands or steering angle; and disturbances $\epsilon$, which represent effects we do not directly control. A more realistic discrete-time model is therefore
 
@@ -147,7 +147,7 @@ $$
 
 This expression makes the circular arc motion explicit. The vehicle is not translating independently in $x$ and $y$; instead, its position evolves according to a rigid-body rotation about an instantaneous centre of curvature.
 
-To connect this with the rigid-body motion from Week 1, and to prepare for control in Week 3, we can write the dynamics in *state-space* form. Let
+To connect this with the rigid-body motion from Chapter 1, and to prepare for control in Chapter 3, we can write the dynamics in *state-space* form. Let
 
 $$
 \mathbf{x}_k =
@@ -210,7 +210,7 @@ B_k =
 \end{bmatrix}.
 $$
 
-This gives us a locally linear model of the rigid-body dynamics. Next week, we will see that this form is useful for a common class of control problems, including the *linear quadratic regulator*.
+This gives us a locally linear model of the rigid-body dynamics. Next chapter, we will see that this form is useful for a common class of control problems, including the *linear quadratic regulator*.
 
 ### A differential drive robot in a ball?
 
@@ -346,7 +346,7 @@ A practical question is whether the system uses **hardware timestamps** or merel
 
 Two calibration types show up everywhere. **Intrinsics** are parameters inside the sensor model. For a camera, these include focal length, principal point, and distortion coefficients. **Extrinsics** describe the rigid transform between frames, such as the transform from the robot base to the camera, $T_{\text{base}\rightarrow \text{camera}}$.
 
-This ties directly back to Week 1: homogeneous transforms and frame chaining. If a sensor lives in frame $S$ and the robot base is frame $B$, we might write
+This ties directly back to Chapter 1: homogeneous transforms and frame chaining. If a sensor lives in frame $S$ and the robot base is frame $B$, we might write
 
 $$
 p^S = T_{SB}\, p^B.
@@ -428,4 +428,4 @@ because [everything is functions and functions describe the world](https://youtu
 
 Next, we look at how to control our robot state subject to these dynamics.
 
-→ [Week 3: Control](../week-03-control/index.md)
+→ [Chapter 3: Control](../chapter-03-control/index.md)

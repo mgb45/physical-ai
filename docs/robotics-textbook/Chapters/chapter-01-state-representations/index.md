@@ -1,4 +1,4 @@
-# Week 1: State representations
+# Chapter 1: State representations
 
 Let’s start with the first big question:
 
@@ -11,7 +11,7 @@ This turns out to be one of the most important design decisions you’ll make.
 
 The obvious starting point is to treat the robot as a **point in space**.
 
-![A point (dot) somewhere.](/img/week-01/point.png)
+![A point (dot) somewhere.](/img/chapter-01/point.png)
 
 ```math
 \mathbf{p} =
@@ -24,7 +24,7 @@ p_z
 
 This gives us a position in 3D, but these numbers only make sense **relative to some coordinate or reference frame**.
 
-![A point (x,y) measured relative to a world frame with x and y axes.](/img/week-01/point_in_world_frame.png)
+![A point (x,y) measured relative to a world frame with x and y axes.](/img/chapter-01/point_in_world_frame.png)
 
 ## Reference frames
 
@@ -57,7 +57,7 @@ y \\
 \end{bmatrix}
 $$ 
 
-![A pose (x,y,theta) measured relative to a 2D world frame with x and y axes.](/img/week-01/2Dpose.png)
+![A pose (x,y,theta) measured relative to a 2D world frame with x and y axes.](/img/chapter-01/2Dpose.png)
 
 We refer to a robot's position and orientation as its *pose*.
 
@@ -87,7 +87,7 @@ Means:
 
 It also encodes the new coordinate frame directly.
 
-![The columns of a rotation matrix define a new rotated coordinate frame x' and y'.](/img/week-01/rot2d.png)
+![The columns of a rotation matrix define a new rotated coordinate frame x' and y'.](/img/chapter-01/rot2d.png)
 
 
 ## Rotations in 3D
@@ -182,9 +182,9 @@ $$
 T_{0n} = T_{01} T_{12} \dots T_{n-1,n}
 $$ 
 
-We can use this to describe a sequence of poses as a robot moves, or the static pose of a more complex robot, like this PR2 robot [(PR2 was a very cool robot released in 2010)](https://robotsguide.com/robots/pr2). We can chain transformations together to build a skeleton or kinematic transform tree (TF) that describes our robot. More on this in [week 7.](../week-06-kinematics/index.md)
+We can use this to describe a sequence of poses as a robot moves, or the static pose of a more complex robot, like this PR2 robot [(PR2 was a very cool robot released in 2010)](https://robotsguide.com/robots/pr2). We can chain transformations together to build a skeleton or kinematic transform tree (TF) that describes our robot. More on this in [chapter 7.](../chapter-06-kinematics/index.md)
 
-![A TF tree showing multiple coordinate frames on a PR2 Robot.](/img/week-01/TFtree.png)
+![A TF tree showing multiple coordinate frames on a PR2 Robot.](/img/chapter-01/TFtree.png)
 
 Let’s zoom out a bit though. Everything we’ve done so far is about:
 
@@ -207,7 +207,7 @@ The simplest option is to represent the world as a **2D plane** and store the ex
 
 We can also add various cost maps or layers (traversability, risk, terrain type, wifi strength etc.) to aid navigation. 
 
-![A costmap with combined layers showing obstacles, wifi strength and traversability.](/img/week-01/gridcells.png)
+![A costmap with combined layers showing obstacles, wifi strength and traversability.](/img/chapter-01/gridcells.png)
 
 These maps may have limitations, because robots have height, and many environments have more complexity than flattening, eg. a bridge over roads, a table you can or can't drive under. There is a tight coupling between what your robot can sense, how it needs to interact with the world, and your choice of representation. For example, while it makes sense to think about a wheeled robot constrained to a ground plane in 2D, when you add an arm to the robot, this representation starts to make life more painful.
 
@@ -239,7 +239,7 @@ So instead of “there is a wall here”, we say “there is a 0.8 probability o
 
 > Hornung, A., Wurm, K. M., Bennewitz, M., Stachniss, C., and Burgard, W. (2013). "OctoMap: An efficient probabilistic 3D mapping framework based on octrees." *Autonomous Robots*, 34(3), 189–206.
 
-![A 3D occupancy grid map.](/img/week-01/occupancygrid.png)
+![A 3D occupancy grid map.](/img/chapter-01/occupancygrid.png)
 
 This representations are very useful for collision avoidance or planning, but make contact rich tasks more challenging (eg. folding a t-shirt).
 
@@ -252,7 +252,7 @@ Instead, maybe it makes more sense to think about graph structures with nodes an
 - nodes = places
 - edges = connections
 
-![A topological map linking a lab to an office to an elevator to a main hall to a cafe to a quad to a library.](/img/week-01/topological.png)
+![A topological map linking a lab to an office to an elevator to a main hall to a cafe to a quad to a library.](/img/chapter-01/topological.png)
 
 You can imagine breaking a space down into a *scene-graph* with
 - rooms
@@ -264,13 +264,13 @@ You can imagine breaking a space down into a *scene-graph* with
 
 This is great for high-level planning, but sacrifices some of the information needed for low level control aspects. A common trade-off is to use both, a local map for *local planning*, and a topological map for *global planning*.
 
-A major limitation of these map representations is that they are generally static and unchanging. But intelligent robots take actions that change the environment. So we need ways of updating these representations or dynamics or *world models*, that model how the world changes in response to our robot actions. We will look at this in week 3.
+A major limitation of these map representations is that they are generally static and unchanging. But intelligent robots take actions that change the environment. So we need ways of updating these representations or dynamics or *world models*, that model how the world changes in response to our robot actions. We will look at this in chapter 3.
 
 ---
 
 ## Final thought
 
-There is no “best” representation, only **the right representation for the task**. This is a recurring theme in robotics. The representations above quickly become limited in terms of tasks. In more complex cases, it may be better to *learn* representations instead. We'll look at this in week 9.
+There is no “best” representation, only **the right representation for the task**. This is a recurring theme in robotics. The representations above quickly become limited in terms of tasks. In more complex cases, it may be better to *learn* representations instead. We'll look at this in chapter 9.
 
 ---
 
@@ -290,4 +290,4 @@ There is no “best” representation, only **the right representation for the t
 
 Now that we can represent state…
 
-→ [Week 2: Modelling](../week-02-modelling/index.md)
+→ [Chapter 2: Modelling](../chapter-02-modelling/index.md)

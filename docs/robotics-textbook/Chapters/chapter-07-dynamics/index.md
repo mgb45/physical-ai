@@ -1,10 +1,10 @@
-# Week 7: Articulated robots and dynamics
+# Chapter 7: Articulated robots and dynamics
 
-Last week we covered [kinematics](../week-06-kinematics/index.md): the geometry of how joint angles map to end-effector poses. Kinematics tells us where the robot is and where the end-effector can go, but it deliberately ignores an important question:
+Last chapter we covered [kinematics](../chapter-06-kinematics/index.md): the geometry of how joint angles map to end-effector poses. Kinematics tells us where the robot is and where the end-effector can go, but it deliberately ignores an important question:
 
 > what actually makes the arm move?
 
-Dynamics answers that question. It tells us how motion changes in response to forces and torques, and what it costs to move a real robot with mass, inertia, gravity and contact. In Week 2, we introduced motion models in a fairly abstract way. This week, we return to robot modelling and add the physics needed to command articulated robots.
+Dynamics answers that question. It tells us how motion changes in response to forces and torques, and what it costs to move a real robot with mass, inertia, gravity and contact. In Chapter 2, we introduced motion models in a fairly abstract way. This chapter, we return to robot modelling and add the physics needed to command articulated robots.
 
 ## The manipulator equations
 
@@ -56,7 +56,7 @@ Efficient algorithms matter here. A naive computation of the dynamics can be exp
 
 ## Inverse dynamics control
 
-In Week 3, we introduced feedback control as a way to correct error. A simple joint-space PID controller can certainly move a robot arm, but it has to fight the nonlinear coupled dynamics without explicitly knowing where those effects come from. The controller sees gravity, inertia and Coriolis effects only as errors to be corrected after they appear. This can make motion sluggish, imprecise or difficult to tune.
+In Chapter 3, we introduced feedback control as a way to correct error. A simple joint-space PID controller can certainly move a robot arm, but it has to fight the nonlinear coupled dynamics without explicitly knowing where those effects come from. The controller sees gravity, inertia and Coriolis effects only as errors to be corrected after they appear. This can make motion sluggish, imprecise or difficult to tune.
 
 A better approach is to use the dynamics model directly. **Computed torque control**, also called **inverse dynamics control**, uses the manipulator equations to cancel the robot's dynamics:
 
@@ -100,7 +100,7 @@ $$
 
 where $Y$ is the **regressor**, a matrix of known functions of the measured joint motion, and $\boldsymbol{\phi}$ is a vector of unknown physical parameters. These parameters may include masses, inertia terms and centre-of-mass locations.
 
-By moving the real robot, measuring joint positions, velocities, accelerations and torques, and stacking many observations together, we get a least-squares estimation problem. This connects directly to Week 4: we have a model, noisy measurements and unknown parameters, and we want the parameter values that best explain the data. If we also have a prior belief, for example from CAD, we can regularise the estimate toward physically plausible values.
+By moving the real robot, measuring joint positions, velocities, accelerations and torques, and stacking many observations together, we get a least-squares estimation problem. This connects directly to Chapter 4: we have a model, noisy measurements and unknown parameters, and we want the parameter values that best explain the data. If we also have a prior belief, for example from CAD, we can regularise the estimate toward physically plausible values.
 
 The quality of the estimate depends strongly on the motion used to collect data. A trajectory that moves only one joint slowly will not reveal much about inertial coupling. A good identification trajectory must be **persistently exciting**, meaning it excites enough of the robot's dynamics to make the parameters observable. In practice, designing safe but informative excitation trajectories is a major part of system identification.
 
@@ -110,7 +110,7 @@ The quality of the estimate depends strongly on the motion used to collect data.
 
 ## Robot calibration: geometry as an estimation problem
 
-System identification estimates dynamic parameters. There is a parallel problem for the geometric parameters introduced in Week 6. The DH parameters, URDF transforms and joint offsets used in a robot model are never exactly right.
+System identification estimates dynamic parameters. There is a parallel problem for the geometric parameters introduced in Chapter 6. The DH parameters, URDF transforms and joint offsets used in a robot model are never exactly right.
 
 The nominal geometry comes from design drawings or CAD models, but real manufacturing introduces small errors in link lengths, joint axes, joint offsets and mounting positions. These errors accumulate along the kinematic chain. A tiny angular or positional error near the base can produce millimetres of error at the end-effector, which can be unacceptable for precision tasks such as assembly, machining, insertion or surgery.
 
@@ -120,7 +120,7 @@ This is again an estimation problem. The kinematic chain provides the prediction
 
 > Hollerbach, J., Khalil, W., and Gautier, M. (2016). "Model identification." In Siciliano, B. et al. (Eds.), *Springer Handbook of Robotics* (2nd ed.), pp. 113-138. Springer.
 
-The connection across the unit is important. Robot modelling, from Week 2, gives the structure of the equations. State estimation, from Week 4, gives the tools for fitting those equations to reality. System identification and robot calibration are both examples of this pattern. The physics changes, but the estimation framework is the same.
+The connection across the unit is important. Robot modelling, from Chapter 2, gives the structure of the equations. State estimation, from Chapter 4, gives the tools for fitting those equations to reality. System identification and robot calibration are both examples of this pattern. The physics changes, but the estimation framework is the same.
 
 ## Contact modelling
 
@@ -182,7 +182,7 @@ Domain randomisation does not solve the sim-to-real problem completely, but it i
 
 ## Big picture
 
-This week connects the geometry of robot arms to the physics required to move them. Kinematics tells us how joint positions map to poses. Dynamics tells us how forces and torques produce motion. Control uses these models to make the robot follow desired trajectories.
+This chapter connects the geometry of robot arms to the physics required to move them. Kinematics tells us how joint positions map to poses. Dynamics tells us how forces and torques produce motion. Control uses these models to make the robot follow desired trajectories.
 
 The manipulator equations are the central model:
 
@@ -234,4 +234,4 @@ We have now covered two broad ways to make robots behave: write down a model of 
 
 Next, we look at perception and learning: how robots sense, interpret and learn from the world around them.
 
-→ [Week 8: Perception and learning](../week-08-perception-and-learning/index.md)
+→ [Chapter 8: Perception and learning](../chapter-08-perception-and-learning/index.md)

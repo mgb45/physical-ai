@@ -1,4 +1,4 @@
-# Week 4: Localisation and state estimation
+# Chapter 4: Localisation and state estimation
 
 ## Uncertainty and beliefs
 
@@ -55,7 +55,7 @@ $$
 
 The recursion above is very powerful, it provides a sequential way of updating our belief in a robot state as new information comes in. Looking at the equations above, we can see what we need to make this happen. We start with a prior belief in our robot state $p(x_0)$.
 
-We then use a dynamics model to predict where our robot may be. Last week, when we introduced robot models we saw that these could be expressed as $x_t = f(x_{t-1},u_{t},\epsilon)$, with $\epsilon$  our uncertainty or disturbances affecting our model. Another way to describe this is that our dynamics are a probabalistic transtion $p(x_t|x_{t-1},u_{t-1})$, given a state and action at time $t-1$, what is the probability that my robot is in the state $x_t$. For simplicity, we will drop the $u$ for now. The equations above use this to make a prediction about where our robot could be after taking some action.
+We then use a dynamics model to predict where our robot may be. Last chapter, when we introduced robot models we saw that these could be expressed as $x_t = f(x_{t-1},u_{t},\epsilon)$, with $\epsilon$  our uncertainty or disturbances affecting our model. Another way to describe this is that our dynamics are a probabalistic transtion $p(x_t|x_{t-1},u_{t-1})$, given a state and action at time $t-1$, what is the probability that my robot is in the state $x_t$. For simplicity, we will drop the $u$ for now. The equations above use this to make a prediction about where our robot could be after taking some action.
 
 We then get a measurement or observation as multiply the likelihood of obtaining this in a given state by the predicted probability of being in that state to get a posterior belief. This becomes the prior for the next recursion. As we repeat this, we accumulate information and refine our beliefs over time.
 
@@ -108,13 +108,13 @@ $$
 
 This is perhaps the most direct implementation of recursive state estimation. It works for arbitrary probability distributions and can represent multiple hypotheses very naturally. For example, if a robot in a corridor cannot distinguish between two similar-looking locations, the histogram filter can represent a belief with two distinct peaks.
 
-![A histogram filter.](/img/week-04/histogram_filters.png)
+![A histogram filter.](/img/chapter-04/histogram_filters.png)
 
 This famous example is taken from the paper 
 
 > Fox, Dieter, Wolfram Burgard, and Sebastian Thrun. "Markov localization for mobile robots in dynamic environments." Journal of artificial intelligence research 11 (1999): 391-427.
 
-The downside is that the number of bins grows very quickly with state dimension, but you can probably already see how this can be used with the occupancy grid map representation we saw in Week 1. For a one or two-dimensional state this may be fine, but for higher-dimensional states it quickly becomes computationally expensive. 
+The downside is that the number of bins grows very quickly with state dimension, but you can probably already see how this can be used with the occupancy grid map representation we saw in Chapter 1. For a one or two-dimensional state this may be fine, but for higher-dimensional states it quickly becomes computationally expensive. 
 
 ---
 
@@ -284,7 +284,7 @@ The EKF works well when nonlinearities are mild, but it is only an approximation
 
 > Julier, S. J. and Uhlmann, J. K. (1997). "A New Extension of the Kalman Filter to Nonlinear Systems." In *Proceedings of SPIE*, vol. 3068, pp. 182–193.
 
-![An extended Kalman filter.](/img/week-04/ekf.png)
+![An extended Kalman filter.](/img/chapter-04/ekf.png)
 
 ---
 
@@ -340,7 +340,7 @@ Particle filters are very flexible and can represent complex, multimodal beliefs
 
 > Gordon, N. J., Salmond, D. J., and Smith, A. F. M. (1993). "Novel approach to nonlinear/non-Gaussian Bayesian state estimation." *IEE Proceedings F – Radar and Signal Processing*, 140(2), 107–113.
 
-![A particle filter.](/img/week-04/particle_filter.png)
+![A particle filter.](/img/chapter-04/particle_filter.png)
 
 ## Summary
 
@@ -412,4 +412,4 @@ Plot over time:
 
 We can now estimate where our robot is. Next, we use this to navigate.
 
-→ [Week 5: Navigation](../week-05-navigation/index.md)
+→ [Chapter 5: Navigation](../chapter-05-navigation/index.md)

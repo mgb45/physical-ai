@@ -1,12 +1,12 @@
-# Week 10: Human-robot interaction
+# Chapter 10: Human-robot interaction
 
-So far, we have mostly designed robots that act alone. We have defined their state, modelled their motion, estimated their pose, planned paths, controlled their dynamics and reasoned about perception and learning. This week we put a human in the loop.
+So far, we have mostly designed robots that act alone. We have defined their state, modelled their motion, estimated their pose, planned paths, controlled their dynamics and reasoned about perception and learning. This chapter we put a human in the loop.
 
 That changes the problem substantially. The robot is no longer solving an optimisation problem in isolation. It is sharing space, goals, attention and responsibility with a person. Humans are uncertain, context-dependent and socially sensitive. They form opinions about robots. They trust them, fear them, get frustrated by them and anthropomorphise them. A robot that ignores these human factors can fail in practice even if its controller is mathematically sound.
 
 **Human-robot interaction (HRI)** is the study of how to design robots that work effectively, safely and acceptably with people. It sits at the intersection of robotics, cognitive science, psychology, design, ethics and human factors engineering.
 
-The central question for this week is:
+The central question for this chapter is:
 
 > how should a robot behave when its environment contains people who also perceive, decide and act?
 
@@ -18,7 +18,7 @@ The first step is the same one we have taken throughout the unit: we need a mode
 
 A useful way to manage this complexity is to model humans at multiple levels of abstraction.
 
-At the **physical level**, a human is a body with pose, velocity, joints, mass and inertia. In a shared workspace, we may care about where the person's limbs are, how fast they are moving and whether their motion could intersect the robot's motion. The kinematics and dynamics ideas from earlier weeks still apply, although the human body is more difficult to observe and model than a robot arm.
+At the **physical level**, a human is a body with pose, velocity, joints, mass and inertia. In a shared workspace, we may care about where the person's limbs are, how fast they are moving and whether their motion could intersect the robot's motion. The kinematics and dynamics ideas from earlier chapters still apply, although the human body is more difficult to observe and model than a robot arm.
 
 At the **cognitive level**, a human is a goal-directed agent. People form beliefs about the world, have objectives and choose actions to achieve those objectives. One classical way to describe this is the **BDI framework**, in which an agent is modelled in terms of beliefs, desires and intentions. This gives us a way to reason about a person not merely as a moving obstacle, but as an agent trying to accomplish something.
 
@@ -300,7 +300,7 @@ Behavioural measures can also be informative. These include how close a person s
 
 A useful early-stage technique is the **Wizard of Oz (WoZ)** study. In a WoZ study, a hidden human operator controls some or all of the robot's behaviour, giving participants the impression that the robot is autonomous. This allows researchers to test interaction concepts before building the complete autonomous system.
 
-A persistent challenge is **ecological validity**. A short laboratory study may not capture how people behave around robots in real deployments over days, weeks or months. Longitudinal field studies are harder to run, but they often reveal issues that do not appear in controlled lab settings.
+A persistent challenge is **ecological validity**. A short laboratory study may not capture how people behave around robots in real deployments over days, chapters or months. Longitudinal field studies are harder to run, but they often reveal issues that do not appear in controlled lab settings.
 
 Because HRI studies involve people, they must comply with ethical review requirements. Participants need informed consent, privacy protections, the right to withdraw and clear information about what data is collected and how it will be used.
 

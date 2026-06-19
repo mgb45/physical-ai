@@ -1,10 +1,10 @@
-# Week 6: Articulated robots and kinematics
+# Chapter 6: Articulated robots and kinematics
 
-Last week we looked at navigation: how a robot estimates where it is, builds a map and plans motion through the world. This week we step back and look at a different kind of robot entirely.
+Last chapter we looked at navigation: how a robot estimates where it is, builds a map and plans motion through the world. This chapter we step back and look at a different kind of robot entirely.
 
 So far, most of our examples have been ground vehicles: robots whose main job is to move around in the world. Manipulators are different. A robot arm reaching for a cup, a gripper closing around an object, or a humanoid waving hello is not primarily described by its position on the floor. Instead, we describe it by the configuration of its links and joints.
 
-To do this properly, we need to return to the fundamentals from [Week 1](../week-01-state-representations/index.md) and [Week 2](../week-02-modelling/index.md) and think more carefully about what state and configuration really mean.
+To do this properly, we need to return to the fundamentals from [Chapter 1](../chapter-01-state-representations/index.md) and [Chapter 2](../chapter-02-modelling/index.md) and think more carefully about what state and configuration really mean.
 
 ## Articulated chains
 
@@ -22,13 +22,13 @@ $$
 \mathcal{C} \subset \mathbb{R}^n.
 $$
 
-This is exactly the idea from [Week 2](../week-02-modelling/index.md): the configuration is the minimal set of variables needed to describe the robot's pose. For a mobile robot, we often used $(x,y,\theta)$. For a robot arm, we usually use the joint vector $\mathbf{q}$.
+This is exactly the idea from [Chapter 2](../chapter-02-modelling/index.md): the configuration is the minimal set of variables needed to describe the robot's pose. For a mobile robot, we often used $(x,y,\theta)$. For a robot arm, we usually use the joint vector $\mathbf{q}$.
 
 The tip of the arm, called the **end-effector**, exists somewhere in **task space**. This is the space where we actually want things to happen: picking up a cup, pressing a button, turning a valve, inserting a peg, or waving at a person. The central question is therefore: how do joint values map to end-effector poses? This is the **kinematics problem**.
 
 ## DH parameters
 
-To solve kinematics problems, we need a systematic way to describe the geometry of an articulated chain. In [Week 1](../week-01-state-representations/index.md), we introduced homogeneous transformations:
+To solve kinematics problems, we need a systematic way to describe the geometry of an articulated chain. In [Chapter 1](../chapter-01-state-representations/index.md), we introduced homogeneous transformations:
 
 $$
 T = \begin{bmatrix} R & d \ 0 & 1 \end{bmatrix},
@@ -99,7 +99,7 @@ In this unit, it is useful to understand both. DH teaches the geometry of serial
 
 ## Forward kinematics
 
-Once we have a transformation for each joint, we can chain them together exactly as we did with coordinate frames in Week 1. This gives the **forward kinematics**:
+Once we have a transformation for each joint, we can chain them together exactly as we did with coordinate frames in Chapter 1. This gives the **forward kinematics**:
 
 $$
 T_{0n}(\mathbf{q}) = T_{01}(q_1) \cdot T_{12}(q_2) \cdots T_{n-1,n}(q_n).
@@ -165,7 +165,7 @@ A major practical issue occurs at **singular configurations**. At a singularity,
 
 It is worth pausing to connect this back to the earlier parts of the unit.
 
-In [Week 2](../week-02-modelling/index.md), we introduced configuration space as an abstract idea. For a mobile robot, the configuration was often $(x,y,\theta)$, and we used that space to reason about what the robot could and could not do. For an articulated arm, the configuration space is the space of all joint values $\mathbf{q}$.
+In [Chapter 2](../chapter-02-modelling/index.md), we introduced configuration space as an abstract idea. For a mobile robot, the configuration was often $(x,y,\theta)$, and we used that space to reason about what the robot could and could not do. For an articulated arm, the configuration space is the space of all joint values $\mathbf{q}$.
 
 The forward kinematics maps configuration space into task space. The workspace is the image of that map: all the end-effector poses the robot can reach.
 
@@ -175,7 +175,7 @@ Kinematics is about the geometry of motion. At this stage, we are not asking wha
 
 That is already a powerful foundation. If we know the robot's configuration, we can compute where its end-effector is. If we know the target pose, we can try to solve for a configuration that reaches it. If we know the obstacles, we can try to plan a collision-free path through configuration space.
 
-But reaching the target is not just a geometric problem. A real robot has mass, inertia, friction, motors, gearboxes and torque limits. Next week we move from geometry to physics and ask what it actually takes to move the robot there.
+But reaching the target is not just a geometric problem. A real robot has mass, inertia, friction, motors, gearboxes and torque limits. Next chapter we move from geometry to physics and ask what it actually takes to move the robot there.
 
 ## Key Papers
 
@@ -197,4 +197,4 @@ But reaching the target is not just a geometric problem. A real robot has mass, 
 
 We know the geometry. Now we need the physics. Next, we look at dynamics: how forces, torques, mass and inertia determine how robots actually move.
 
-→ [Week 7: Dynamics](../week-07-dynamics/index.md)
+→ [Chapter 7: Dynamics](../chapter-07-dynamics/index.md)

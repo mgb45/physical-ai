@@ -1,12 +1,8 @@
 # Intelligent robotics in a nutshell
 
-Welcome to intelligent robotics. We are going to attempt to teach you everything we know in 12 weeks.
+Welcome to intelligent robotics. I am going to attempt to cram everything I know into 10 chapters.
 
-But first some acknowledgements. These notes are derived from slides and material developed by my colleagues 
-
-> **Dana Kulić**, **Juxi Leitner**, **Pamela Carreno-Medrano** and **Tan Chee Pin**.  
-
-and cleaned/messed up by multiple LLMs. Sady, most errors are likely attributable to me.
+But first some acknowledgements. These notes were informed by teaching materials and discussions developed over many years by colleagues and students including Dana Kulić, Juxi Leitner, Pamela Carreno-Medrano, Tan Chee Pin, Subramanian Ramamoorthy, Todor Davchev, Miguel Jaques, Daniel Angelov, Yordan Hristov, Artūras Straižys, Juyan Zhang, Haoyang Jiang, Boxuan Zhang, Bryce Ferenczi and many others. Any errors, ommissions or questionable editorial decisions are more own. Figures are AI generated placeholders.
 
 Ok. Buckle up!
 
@@ -88,7 +84,7 @@ If you find these notes useful, please cite them as:
 ```bibtex
 @book{robots,
   title        = "Intelligent Robotics",
-  howpublished = "Course Notes for Intelligent Robotics",
+  howpublished = "Online textbook draft",
   author       = "Burke, Michael",
   year         = 2026,
 }
@@ -96,4 +92,4 @@ If you find these notes useful, please cite them as:
 
 ## Let's dive in
 
-[Week 1: Robot States →](./Weeks/week-01-state-representations/index.md)
+[Chapter 1: Robot States →](./Chapters/chapter-01-state-representations/index.md)

@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <!-- Filter to create a hand-drawn, sketchy ink effect -->
+    <filter id="sketchy-hand-drawn" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+      <!-- Slightly softens the rough edges to look like real ink on paper -->
+      <feGaussianBlur in="displaced" stdDeviation="0.4" result="blurred" />
+      <feMerge>
+        <feMergeNode in="blurred" />
+        <feMergeNode in="SourceGraphic" opacity="0.3" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Clean white background -->
+  <rect width="100%" height="100%" fill="#FFFFFF" />
+
+  <!-- Main Logo Group with Sketch Filter applied -->
+  <g filter="url(#sketchy-hand-drawn)" fill="none" stroke="#1A1A1A" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    
+    <!-- ANTENNA -->
+    <!-- Little loop on top -->
+    <circle cx="200" cy="95" r="7" />
+    <!-- Slightly crooked antenna stem -->
+    <path d="M 199,102 C 199.5,110 201,115 200,125" />
+    
+    <!-- HEAD -->
+    <!-- Rounded square box for the head with loose overlapping corner lines -->
+    <path d="M 152,125 
+             C 170,123 230,124 248,125 
+             C 253,145 254,175 252,195 
+             C 230,197 170,196 148,195 
+             C 146,175 147,145 152,125 Z" />
+    
+    <!-- EARS / SIDE BOLTS -->
+    <!-- Left bolt -->
+    <path d="M 148,153 C 140,153 138,155 138,160 C 138,165 140,167 148,167" />
+    <!-- Right bolt -->
+    <path d="M 252,153 C 260,153 262,155 262,160 C 262,165 260,167 252,167" />
+
+    <!-- EYES (Big, cute anime-style sketch eyes) -->
+    <!-- Left Eye Outer -->
+    <circle cx="180" cy="155" r="12" />
+    <!-- Left Eye Pupil (Filled with a loose sketchy hatch) -->
+    <ellipse cx="182" cy="155" rx="6" ry="7" fill="#1A1A1A" />
+    <!-- Left Eye Catchlight -->
+    <circle cx="180" cy="152" r="2" fill="#FFFFFF" stroke="none" />
+
+    <!-- Right Eye Outer -->
+    <circle cx="220" cy="155" r="12" />
+    <!-- Right Eye Pupil -->
+    <ellipse cx="218" cy="155" rx="6" ry="7" fill="#1A1A1A" />
+    <!-- Right Eye Catchlight -->
+    <circle cx="216" cy="152" r="2" fill="#FFFFFF" stroke="none" />
+
+    <!-- SMILE -->
+    <!-- Sweet, slightly lopsided little smile -->
+    <path d="M 193,176 C 197,181 203,181 207,176" stroke-width="3" />
+    <!-- Rosy cheek sketch lines -->
+    <path d="M 162,170 L 166,174" stroke-width="2" />
+    <path d="M 165,169 L 169,173" stroke-width="2" />
+    <path d="M 231,170 L 235,174" stroke-width="2" />
+    <path d="M 234,169 L 238,173" stroke-width="2" />
+
+    <!-- NECK -->
+    <path d="M 188,196 L 188,206" />
+    <path d="M 212,196 L 212,206" />
+    <path d="M 184,201 L 216,201" />
+
+    <!-- BODY -->
+    <!-- Pear/Trapezoid shaped chubby body with overlapping sketch marks -->
+    <path d="M 172,206 
+             C 190,205 210,205 228,206 
+             C 240,235 245,265 235,285 
+             C 215,288 185,288 165,285 
+             C 155,265 160,235 172,206 Z" />
+
+    <!-- BELLY SCREEN / HEART -->
+    <!-- A cute little sketchy heart on its chest instead of meters -->
+    <path d="M 200,232 
+             C 200,232 191,223 184,228 
+             C 178,233 182,243 200,254 
+             C 218,243 222,233 216,228 
+             C 209,223 200,232 200,232 Z" fill="#1A1A1A" fill-opacity="0.05" />
+
+    <!-- ARMS -->
+    <!-- Left Arm (Waving happily) -->
+    <path d="M 164,220 C 145,215 130,195 125,180" />
+    <!-- Left Hand (Simple mitten/circle) -->
+    <circle cx="124" cy="176" r="6" />
+    
+    <!-- Right Arm (Relaxed at side) -->
+    <path d="M 236,220 C 250,230 255,245 252,260" />
+    <!-- Right Hand -->
+    <circle cx="251" cy="265" r="6" />
+
+    <!-- LEGS -->
+    <!-- Left Leg (Short and stubby) -->
+    <path d="M 182,286 L 180,305" />
+    <!-- Left Foot -->
+    <path d="M 172,305 C 172,300 190,300 190,305 Z" />
+
+    <!-- Right Leg -->
+    <path d="M 218,286 L 220,305" />
+    <!-- Right Foot -->
+    <path d="M 210,305 C 210,300 228,300 228,305 Z" />
+    
+    <!-- GROUND SHADOW -->
+    <!-- Quick sketchy ground lines to anchor the logo -->
+    <path d="M 155,315 C 180,317 220,317 245,315" stroke-width="2" />
+    <path d="M 170,319 C 190,320 210,320 230,319" stroke-width="1.5" />
+  </g>
+</svg>

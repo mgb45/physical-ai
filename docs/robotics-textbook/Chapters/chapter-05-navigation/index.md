@@ -1,6 +1,6 @@
-# Week 5: Navigation and mapping
+# Chapter 5: Navigation and mapping
 
-So far, we have defined state, built models of how a robot moves and designed controllers that choose actions. Throughout that discussion, however, we have been quietly relying on a very strong assumption: we know where the robot is and what the world looks like. This week we remove that assumption.
+So far, we have defined state, built models of how a robot moves and designed controllers that choose actions. Throughout that discussion, however, we have been quietly relying on a very strong assumption: we know where the robot is and what the world looks like. This chapter we remove that assumption.
 
 ## SLAM
 
@@ -577,7 +577,7 @@ Bug algorithms are simple and reactive, but they do not operate in velocity spac
 
 ## Big picture
 
-This week connects the major components of robot navigation. Modelling tells us how the robot moves. Estimation tells us where the robot is. Mapping tells us what the world looks like. Planning tells us what the robot should do, both globally and locally.
+This chapter connects the major components of robot navigation. Modelling tells us how the robot moves. Estimation tells us where the robot is. Mapping tells us what the world looks like. Planning tells us what the robot should do, both globally and locally.
 
 The full navigation stack can be viewed as
 
@@ -630,4 +630,4 @@ Robotics is not just choosing actions. It is choosing actions **under uncertaint
 
 We now have models, estimators and planners, both global and local. Next, we look at perception and learning: how robots sense and interpret the world around them.
 
-→ [Week 6: Perception and Learning](../week-08-perception-and-learning/index.md)
+→ [Chapter 6: Perception and Learning](../chapter-08-perception-and-learning/index.md)

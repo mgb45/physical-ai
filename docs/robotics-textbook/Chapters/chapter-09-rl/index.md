@@ -1,4 +1,4 @@
-# Week 9: Reinforcement learning
+# Chapter 9: Reinforcement learning
 
 So far in the unit, we have mostly assumed that we can write down a useful model of the robot and its environment. We used that model to estimate state, plan trajectories and compute control actions. Reinforcement learning asks a different question: what if we do not have a usable model, or the model is a complex simulator that is difficult to analyse directly? What if the task objective is hard to express as a classical controller, but easy to score after the fact? What if we want the robot to improve through experience?
 
@@ -83,7 +83,7 @@ $$
 b_t(s) = P(s_t = s \mid o_{1:t}, a_{0:t-1}).
 $$
 
-This connects directly to state estimation. The Kalman filter, EKF, particle filter and SLAM methods from earlier weeks can all be viewed as ways of maintaining a belief over hidden state. In a POMDP, the policy is then written as
+This connects directly to state estimation. The Kalman filter, EKF, particle filter and SLAM methods from earlier chapters can all be viewed as ways of maintaining a belief over hidden state. In a POMDP, the policy is then written as
 
 $$
 \pi(a \mid b),
@@ -376,4 +376,4 @@ We have now covered the major pillars of robot intelligence: representation, mod
 
 Next, we ask how all of these ideas change when a human is in the loop.
 
-→ [Week 10: Human Robot Interaction](../week-10-hri/index.md)
+→ [Chapter 10: Human Robot Interaction](../chapter-10-hri/index.md)

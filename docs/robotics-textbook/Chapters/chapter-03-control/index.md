@@ -1,8 +1,8 @@
-# Week 3: Robot control
+# Chapter 3: Robot control
 
-Last week we talked about how to model a robot: how its state evolves over time in response to control inputs. This week we ask the next natural question: how do we actually make the robot move the way we want?
+Last chapter we talked about how to model a robot: how its state evolves over time in response to control inputs. This chapter we ask the next natural question: how do we actually make the robot move the way we want?
 
-More specifically, we want to choose control inputs $u$ that drive the robot toward a desired state, trajectory, or behaviour. In Week 2 we wrote models such as
+More specifically, we want to choose control inputs $u$ that drive the robot toward a desired state, trajectory, or behaviour. In Chapter 2 we wrote models such as
 
 $$
 x_{k+1} = f(x_k, u_k),
@@ -34,7 +34,7 @@ A more robust idea is to measure what actually happened and correct for it. This
 
 Suppose we have a desired state, or reference, $x_d$, and an actual state $x$. The controller compares these quantities, computes an error, and chooses a control input $u$ based on that error. The robot then moves, we measure the new state, and the process repeats.
 
-![A feedback control loop. Given a goal and a measured output, a controller computes a control to send to a plant, which produces an output that we sense and compare to our goal again.](/img/week-02/feedbackcontrol.png)
+![A feedback control loop. Given a goal and a measured output, a controller computes a control to send to a plant, which produces an output that we sense and compare to our goal again.](/img/chapter-02/feedbackcontrol.png)
 
 If $x_d$ is a fixed point, the problem is usually called regulation or setpoint control. If $x_d$ changes over time, the problem is usually called trajectory tracking. In both cases, the key idea is the same: use measurement to reduce error.
 
@@ -80,7 +80,7 @@ $$
 
 The gains $K_p$, $K_i$, and $K_d$ determine the behaviour of the controller. Increasing $K_p$ usually makes the system respond more strongly to error, but too much proportional gain can cause oscillation or instability. Increasing $K_d$ adds damping, but derivative control is sensitive to measurement noise. Increasing $K_i$ helps eliminate steady-state error, but too much integral action can cause slow oscillations or integral windup, where accumulated error becomes too large and the controller continues applying excessive control even after the system has moved close to the target. PD controller (no I term) is often more common in robotics because the I term can cause more practical trouble than benefit.
 
-![PID-style control of robot position to a goal. Proportional control alone can oscillate or become unstable, while derivative damping and integral correction can improve the response.](/img/week-02/stepresponse.png)
+![PID-style control of robot position to a goal. Proportional control alone can oscillate or become unstable, while derivative damping and integral correction can improve the response.](/img/chapter-02/stepresponse.png)
 
 PID control is popular because it is simple, fast, interpretable, and often effective. It is widely used in low-level robot control, such as velocity control, joint control, heading control, altitude control, and temperature or motor regulation.
 
@@ -363,4 +363,4 @@ These methods are not mutually exclusive. A robot might use a planner to generat
 
 So far, we have assumed that we can measure the state of the robot accurately enough to use it for feedback. Next, we look at what happens when we cannot directly observe the state and must estimate it from noisy, delayed, and incomplete sensor measurements.
 
-→ [Week 4: State Estimation](../week-04-state-estimation/index.md)
+→ [Chapter 4: State Estimation](../chapter-04-state-estimation/index.md)
