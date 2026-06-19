@@ -8,7 +8,7 @@ Ok. Buckle up!
 
 ## All problems are optimal control problems
 
-Let's start with some definitions. First, **ANY** robot task basically amounts to the following.
+Let's start with some definitions. First, **ANY** (probably not, but we're not afraid of bold claims) robot task basically amounts to the following.
 
 We seek to find a control input $u(t)$ and corresponding state trajectory $x(t)$ that minimize the cost
 
@@ -63,19 +63,20 @@ We won't answer this question, but we will walk through a range of partial answe
 
 ## How we answer these questions (partially)
 
-1. Representing Robot Pose: We start with representations - for common robot forms, how do we describe their state in the world? 
-2. Robot Modelling: We will look at some standard dynamics and *kinematic* models of robots and how we model these, starting with ground vehicles.
+1. Representing Robot Pose and World States: We start with representations - for common robot forms, how do we describe their state in the world? 
+2. Robot and World Modelling: We will look at some standard dynamics and *kinematic* models of robots and how we model these, starting with ground vehicles. We'll also look at simulators as models.
 3. Robot control: We will look at specific controller designs and ways to find policies for a range of standard robots. 
-4. SLAM part 1 (Localisation): We will look at a common state estimation problem, where is our robot in the world?  
-5. SLAM part 2 (Planning and Navigation): We will continue to look at state estimation, what is the state of the world (or *map*) and how should we move through it. 
+4. Localisation and state estimation: We will look at a common state estimation problem, where is our robot in the world? We will return to this over and over, in the context of robot learning and other estimation or inference problems. 
+5. Mapping, Planning and Navigation: We will continue to look at state estimation, what is the state of the world (or *map*) and abstractions that make it easier to move through it. 
 6. Articulated robots (kinematics): We will make our robots a bit more compicated and think about the state and representing robots with arms or multiple joints. 
-7. Articulated robots (dynamics): We will think about the dynamics of these more complicated robot systems.
-8. 6. Perception and learning: We will briefly look at cameras as a sensor, but also look at ways to *learn* policies from *demonstrations*.
+7. Articulated robots (dynamics): We will think about the dynamics of these more complicated robot systems and estimation here through the lens of system identification.
+8. 6. Perception and Imitation learning: We will briefly look at more complex perception pipelines as observation models, but also look at ways to *learn* policies and dynamics from *demonstrations* or transition data.
 9. Reinforcement learning: We will think about more general ways of solving the optimal control problem, when we don't have a lot of information.
+10. Human Robot Interaction: We will look at modelling the elephant in the room, or to be more precise, the people. 
 
 We often think about robotics as both a science and system. We use science and theory to model or understand one component of the general problem, but our choices then lead to implications in other aspects of the system because everything is tightly coupled. Good roboticists manage to straddle the detail in each little subsystem, but also the big picture, how does everything work together?
 
-As part of this unit, we will run a rolling project. We have deliberately simplified the robot - just a wheeled platform with very limited sensing and unusual dynamics. We will use this to work through all of the modelling and control choices above, as well as the practical difficulties of making an autnomous integrated sytem work in the real world. But, don't forget - these principles apply everywhere and to everything - we use the exact same approaches on our most complex humanoid robots in our research. 
+The core aim in this book is to bring classical robotics stacks and modern learning ones closer, connecting well established theory to more modern techniques.
 
 ## How to cite
 
