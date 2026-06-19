@@ -40,12 +40,12 @@ const config: Config = {
       {
         docs: {
           routeBasePath: '/',
-          path: 'docs/robotics-unit',
+          path: 'docs/robotics-textbook',
           sidebarPath: './sidebars.ts',
           remarkPlugins: [remarkMath],
           rehypePlugins: [[rehypeKatex, {strict: false}]],
           editUrl:
-            'https://github.com/mgb45/intelligent-robots/tree/main/docs/robotics-unit/',
+            'https://github.com/mgb45/intelligent-robots/tree/main/docs/robotics-textbook/',
         },
         blog: false,
         pages: false,
